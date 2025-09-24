@@ -281,7 +281,7 @@ __global__ void shadeFakeMaterial(
 }
 
 // TODO move all of these to a new file
-__device__ glm::vec3 squareToDiskConcentric(glm::vec2 xi) {
+inline __device__ glm::vec3 squareToDiskConcentric(glm::vec2 xi) {
 
     glm::vec2 corrected = 2.0f * xi - glm::vec2(1.0);
     float x = corrected.x;
@@ -325,6 +325,21 @@ inline __device__ Ray SpawnRay(const glm::vec3& pos, const glm::vec3& wi)
 inline __device__ float squareToHemisphereCosinePDF(const glm::vec3& sample) {
 
     return sample.z * (1.0 / PI);
+}
+
+// TODO: Evaluate if there is a more performant way to do this..
+inline __device__ void coordinateSystem(glm::vec3 v1, glm::vec3& v2, glm::vec3& v3) {
+    if (abs(v1.x) > abs(v1.y))
+        v2 = glm::vec3(-v1.z, 0, v1.x) / sqrt(v1.x * v1.x + v1.z * v1.z);
+    else
+        v2 = glm::vec3(0, v1.z, -v1.y) / sqrt(v1.y * v1.y + v1.z * v1.z);
+    v3 = cross(v1, v2);
+}
+
+inline __device__ glm::mat3 LocalToWorld(glm::vec3 nor) {
+    glm::vec3 tan, bit;
+    coordinateSystem(nor, tan, bit);
+    return glm::mat3(tan, bit, nor);
 }
 
 __global__ void shadeMaterial(
@@ -371,7 +386,10 @@ __global__ void shadeMaterial(
 
                 glm::vec3 hemisphereCosWi = squareToHemisphereCosine(xi);
                 float pdf = squareToHemisphereCosinePDF(hemisphereCosWi);
-                glm::vec3 wiW = hemisphereCosWi; // TODO: convert to world space?
+                pdf = glm::max(pdf, 0.001f); // for safety.
+
+                glm::mat3 local2World = LocalToWorld(intersection.surfaceNormal);
+                glm::vec3 wiW = local2World * hemisphereCosWi;
                 glm::vec3 bsdf = materialColor / PI;
 
                 pathSegments[idx].color *= (bsdf * glm::abs(glm::dot(wiW, intersection.surfaceNormal))) / pdf;
@@ -496,7 +514,7 @@ void pathtrace(uchar4* pbo, int frame, int iter)
             dev_paths,
             dev_materials
         );
-        iterationComplete = true; // TODO: should be based off stream compaction results.
+        iterationComplete = depth >= 2; // TODO: should be based off stream compaction results.
 
         if (guiData != NULL)
         {
