@@ -54,4 +54,11 @@ __host__ __device__ void scatterRay(
     // TODO: implement this.
     // A basic implementation of pure-diffuse shading will just call the
     // calculateRandomDirectionInHemisphere defined above.
+    glm::vec3 wi = calculateRandomDirectionInHemisphere(normal, rng);
+    float pdf = wi.z / PI;
+    glm::vec3 bsdf = m.color / PI;
+
+    pathSegment.color *= (bsdf * glm::abs(glm::dot(wi, normal))) / pdf;
+    pathSegment.ray.origin = intersect + wi * 0.0001f;
+    pathSegment.ray.direction = wi;
 }

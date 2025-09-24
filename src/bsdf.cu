@@ -126,6 +126,8 @@ __global__ void shadeMaterial(
 
                 pathSegments[idx].color *= (bsdf * glm::abs(glm::dot(wiW, intersection.surfaceNormal))) / pdf;
                 pathSegments[idx].ray = SpawnRay(wo.origin + intersection.t * wo.direction, wiW);
+                //glm::vec3 intersect = wo.origin + intersection.t * wo.direction;
+                //scatterRay(pathSegments[idx], intersect, intersection.surfaceNormal, material, rng);
             }
             // If there was no intersection, color the ray black.
             // Lots of renderers use 4 channel color, RGBA, where A = alpha, often
