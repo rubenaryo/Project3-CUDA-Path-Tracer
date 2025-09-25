@@ -1,5 +1,23 @@
 #include "intersections.h"
 
+/// Kernel to label each intersection with additional information to be used for ray sorting and discarding
+__global__ void flagIntersections(int N, const ShadeableIntersection* isects, IntersectionFlag* flags)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= N)
+        return;
+
+    const ShadeableIntersection isect = isects[idx];
+    if (isect.t >= 0.0f)
+    {
+        flags[idx] = IF_OPAQUE; // TODO: opaque/translucent passes
+    }
+    else
+    {
+        flags[idx] = IF_NONINTERSECT; // Probably unnecessary if we init the whole array to this value.
+    }
+}
+
 __host__ __device__ float boxIntersectionTest(
     Geom box,
     Ray r,

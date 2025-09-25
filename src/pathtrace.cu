@@ -3,9 +3,12 @@
 #include <cstdio>
 #include <cuda.h>
 #include <cmath>
+
+#include <thrust/device_vector.h>
 #include <thrust/execution_policy.h>
 #include <thrust/random.h>
 #include <thrust/remove.h>
+#include <thrust/sequence.h>
 
 #include "sceneStructs.h"
 #include "scene.h"
@@ -73,7 +76,10 @@ static glm::vec3* dev_image = NULL;
 static Geom* dev_geoms = NULL;
 static Material* dev_materials = NULL;
 static PathSegment* dev_paths = NULL;
+static PathSegment* dev_opaquePaths = NULL;
 static ShadeableIntersection* dev_intersections = NULL;
+static IntersectionFlag* dev_intersectFlags = NULL;  // Parallel array of flags to mark material type.
+
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
 
@@ -93,6 +99,7 @@ void pathtraceInit(Scene* scene)
     cudaMemset(dev_image, 0, pixelcount * sizeof(glm::vec3));
 
     cudaMalloc(&dev_paths, pixelcount * sizeof(PathSegment));
+    cudaMalloc(&dev_opaquePaths, pixelcount * sizeof(PathSegment));
 
     cudaMalloc(&dev_geoms, scene->geoms.size() * sizeof(Geom));
     cudaMemcpy(dev_geoms, scene->geoms.data(), scene->geoms.size() * sizeof(Geom), cudaMemcpyHostToDevice);
@@ -103,7 +110,8 @@ void pathtraceInit(Scene* scene)
     cudaMalloc(&dev_intersections, pixelcount * sizeof(ShadeableIntersection));
     cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 
-    // TODO: initialize any extra device memeory you need
+    cudaMalloc(&dev_intersectFlags, pixelcount * sizeof(IntersectionFlag));
+    cudaMemset(dev_intersectFlags, IF_NONINTERSECT, pixelcount * sizeof(IntersectionFlag));
 
     checkCUDAError("pathtraceInit");
 }
@@ -115,7 +123,7 @@ void pathtraceFree()
     cudaFree(dev_geoms);
     cudaFree(dev_materials);
     cudaFree(dev_intersections);
-    // TODO: clean up any extra device memory you created
+    cudaFree(dev_intersectFlags);
 
     checkCUDAError("pathtraceFree");
 }
@@ -232,6 +240,12 @@ __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iteration
     }
 }
 
+struct IntersectPred
+{
+    __host__ __device__
+    bool operator()(const ShadeableIntersection& s) { return s.t < -0.95f;}
+};
+
 /**
  * Wrapper for the __global__ call that sets up the kernel calls and does a ton
  * of memory management
@@ -289,6 +303,12 @@ void pathtrace(uchar4* pbo, int frame, int iter)
     PathSegment* dev_path_end = dev_paths + pixelcount;
     int num_paths = dev_path_end - dev_paths;
 
+    IntersectionFlag* dev_flags_end = dev_intersectFlags + pixelcount;
+    int num_flags = dev_flags_end - dev_intersectFlags;
+
+    PathSegment* dev_opaque_path_end = dev_opaquePaths; // Start opaque array as empty
+    int num_opaque_paths = 0;
+
     // --- PathSegment Tracing Stage ---
     // Shoot ray into scene, bounce between objects, push shading chunks
 
@@ -312,6 +332,27 @@ void pathtrace(uchar4* pbo, int frame, int iter)
         cudaDeviceSynchronize();
         depth++;
 
+        // Flag intersections as Opaque, Translucent, or Non-intersecting
+        //flagIntersections<<<numblocksPathSegmentTracing, blockSize1d>>>(pixelcount, dev_intersections, dev_intersectFlags);        
+        
+        // Trim master path list by removing non-intersections
+        //dev_path_end = thrust::remove_if(thrust::device, dev_paths, dev_path_end, dev_intersectFlags, IntersectionPred<IF_NONINTERSECT>());
+        //num_paths = dev_path_end - dev_paths;
+
+        // Similarly trim flag list (INVESTIGATE: zip iterators?)
+        // dev_flags_end = thrust::remove_if(thrust::device, dev_intersectFlags, dev_flags_end, IntersectionPred<IF_NONINTERSECT>());
+        // num_flags = dev_flags_end - dev_intersectFlags;
+
+        // INVESTIGATE: Is it worth compacting the ShadeableIntersections array as well?
+
+        //dim3 numValidPaths = (num_paths + blockSize1d - 1) / blockSize1d;
+
+        // Copy opaque intersections to the opaque collection (using flags as stencil)
+        //dev_opaque_path_end = thrust::copy_if(thrust::device, dev_paths, dev_path_end, dev_intersectFlags, dev_opaquePaths, IntersectionPred<IF_OPAQUE>());
+        //num_opaque_paths = dev_opaque_path_end - dev_opaquePaths;
+        //
+        //dim3 numOpaqueBlocks = (num_opaque_paths + blockSize1d - 1) / blockSize1d;
+
         // TODO:
         // --- Shading Stage ---
         // Shade path segments based on intersections and generate new rays by
@@ -321,7 +362,8 @@ void pathtrace(uchar4* pbo, int frame, int iter)
         // TODO: compare between directly shading the path segments and shading
         // path segments that have been reshuffled to be contiguous in memory.
 
-        shadeMaterial<<<numblocksPathSegmentTracing, blockSize1d>>>(
+        // Opaque Shading Pass
+        shadeMaterial<<<num_paths, blockSize1d>>>(
             iter,
             num_paths,
             dev_intersections,
@@ -338,7 +380,7 @@ void pathtrace(uchar4* pbo, int frame, int iter)
 
     // Assemble this iteration and apply it to the image
     dim3 numBlocksPixels = (pixelcount + blockSize1d - 1) / blockSize1d;
-    finalGather<<<numBlocksPixels, blockSize1d>>>(num_paths, dev_image, dev_paths);
+    finalGather<<<numBlocksPixels, blockSize1d>>>(pixelcount, dev_image, dev_paths);
 
     ///////////////////////////////////////////////////////////////////////////
 

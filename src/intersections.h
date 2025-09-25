@@ -20,6 +20,22 @@ __host__ __device__ inline unsigned int utilhash(unsigned int a)
     return a;
 }
 
+enum IntersectionFlag : int
+{
+    IF_NONINTERSECT = 0,
+    IF_OPAQUE       = 1,
+    IF_TRANSLUCENT  = 2
+};
+
+template<IntersectionFlag I>
+struct IntersectionPred
+{
+    __host__ __device__
+    bool operator()(IntersectionFlag i) { return i == I; }
+};
+
+__global__ void flagIntersections(int N, const ShadeableIntersection* isects, IntersectionFlag* flags);
+
 // CHECKITOUT
 /**
  * Compute a point at parameter value `t` on ray `r`.

@@ -67,11 +67,12 @@ __global__ void shadeMaterial(
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < num_paths)
     {
-        int depth = pathSegments[idx].remainingBounces;
+        const PathSegment path = pathSegments[idx];
+        int depth = path.remainingBounces;
         if (depth <= 0)
             return; // Retire this thread early if the ray has gone out of bounds or run out of depth.
 
-        ShadeableIntersection intersection = shadeableIntersections[idx];
+        ShadeableIntersection intersection = shadeableIntersections[path.pixelIndex];
         if (intersection.t > 0.0f) // if the intersection exists...
         {
             // Set up the RNG
