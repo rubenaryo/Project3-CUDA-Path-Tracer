@@ -25,11 +25,6 @@ inline __device__ glm::vec3 DiffuseBSDF(const glm::vec3& albedo)
     return albedo * INV_PI;
 }
 
-inline __device__ float squareToHemisphereCosinePDF(const glm::vec3& sample)
-{
-    return glm::abs(sample.z) * INV_PI;
-}
-
 __device__ void scatterRay(
     PathSegment& pathSegment,
     glm::vec3 intersect,
@@ -38,20 +33,11 @@ __device__ void scatterRay(
     thrust::default_random_engine& rng)
 {
     glm::vec3 wi = calculateRandomDirectionInHemisphere(normal, rng);
-    float pdf = squareToHemisphereCosinePDF(wi);
-
-    if (glm::abs(pdf) < FLT_EPSILON)
-    {
-        // guard against div by zero, 
-        pathSegment.remainingBounces = 0;
-        return;
-    }
-    
     glm::vec3 bsdf = DiffuseBSDF(m.color);
+    //float lambert = glm::abs(glm::dot(wi, normal));
+    //float pdf = glm::abs(glm::dot(wi, normal)) * INV_PI;
 
-    float lambert = glm::abs(glm::dot(wi, normal));
-    glm::vec3 lightTransportResult = (bsdf * lambert) / pdf;
-    lightTransportResult = glm::min(lightTransportResult, glm::vec3(1.0f));
+    glm::vec3 lightTransportResult = bsdf * PI; // Normally (bsdf*lambert)/pdf but this is simplified
     pathSegment.color *= lightTransportResult;
     pathSegment.ray = SpawnRay(intersect, wi);
     pathSegment.remainingBounces--;
