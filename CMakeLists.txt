@@ -22,6 +22,7 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 find_package(OpenGL REQUIRED)
+find_package(CCCL REQUIRED)
 
 if(UNIX)
     include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
@@ -111,6 +112,7 @@ source_group("ImGui\\Sources" FILES ${imgui_sources})
 add_executable(${CMAKE_PROJECT_NAME} ${sources} ${headers} ${imgui_sources} ${imgui_headers})
 target_link_libraries(${CMAKE_PROJECT_NAME}
     ${GL_LIBRARIES}
+	CCCL::Thrust
     #stream_compaction  # TODO: uncomment if using your stream compaction
 )
 set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
