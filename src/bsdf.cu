@@ -73,24 +73,58 @@ __global__ void shadeMaterial(
 #endif 
         // Set up RNG to generate xi's
         thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, depth);
-        thrust::uniform_real_distribution<float> u01(0, 1);
 
         Material material = materials[intersection.materialId];
         glm::vec3 materialColor = material.color;
 
-        // If the material indicates that the object was a light, "light" the ray
-        if (material.emittance > 0.0f)
-        {
-            pathSegments[idx].color *= (materialColor * material.emittance);
-            pathSegments[idx].remainingBounces = 0; // Mark it for culling later
-        }
-        else
-        {
+        Ray wo = path.ray;
+        glm::vec3 intersect = wo.origin + intersection.t * wo.direction;
+        scatterRay(pathSegments[idx], intersect, intersection.surfaceNormal, material, rng);
+    }
+}
 
-            PathSegment path = pathSegments[idx];
-            Ray wo = path.ray;
-            glm::vec3 intersect = wo.origin + intersection.t * wo.direction;
-            scatterRay(pathSegments[idx], intersect, intersection.surfaceNormal, material, rng);
+__global__ void shadeMaterialSpecular(
+      int iter
+    , int num_paths
+    , ShadeableIntersection* shadeableIntersections
+    , PathSegment* pathSegments
+    , Material* materials
+)
+{
+
+}
+
+__global__ void shadeMaterialEmissive(
+    int iter
+    , int num_paths
+    , ShadeableIntersection* shadeableIntersections
+    , PathSegment* pathSegments
+    , Material* materials
+)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < num_paths)
+    {
+        const PathSegment path = pathSegments[idx];
+        int depth = path.remainingBounces;
+        if (depth <= 0)
+            return; // Retire this thread early if the ray has gone out of bounds or run out of depth.
+
+        ShadeableIntersection intersection = shadeableIntersections[idx];
+
+    #if STREAM_COMPACTION
+        assert(intersection.t > FLT_EPSILON); // Stream compaction has removed rays that didn't hit anything by this point
+    #else
+        if (intersection.t <= 0.0f)
+        {
+            pathSegments[idx].color = glm::vec3(0.0f);
+            pathSegments[idx].remainingBounces = 0;
+            return;
         }
+    #endif 
+
+        Material material = materials[intersection.materialId];
+        pathSegments[idx].color *= (material.color * material.emittance);
+        pathSegments[idx].remainingBounces = 0; // Mark it for culling later
     }
 }

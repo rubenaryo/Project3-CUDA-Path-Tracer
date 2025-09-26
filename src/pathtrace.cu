@@ -314,7 +314,8 @@ __host__ void shadeByMaterialType(int num_paths, int iter)
 
     // TODO: Put this into a loop and index each kernel as a func pointer
     int diffuse_end = thrust::upper_bound(thrust::device, dev_isectMaterials, dev_isectMaterials + num_paths, MT_DIFFUSE) - dev_isectMaterials;
-    int spec_end = thrust::upper_bound(thrust::device, dev_isectMaterials, dev_isectMaterials + num_paths, MT_SPECULAR) - dev_isectMaterials;
+    int spec_end    = thrust::upper_bound(thrust::device, dev_isectMaterials, dev_isectMaterials + num_paths, MT_SPECULAR) - dev_isectMaterials;
+    int emissive_end = thrust::upper_bound(thrust::device, dev_isectMaterials, dev_isectMaterials + num_paths, MT_EMISSIVE) - dev_isectMaterials;
 
     int num_diffuse = diffuse_end;
     if (diffuse_end)
@@ -339,6 +340,20 @@ __host__ void shadeByMaterialType(int num_paths, int iter)
             , num_spec
             , dev_intersections + spec_start
             , dev_paths + spec_start
+            , dev_materials
+            );
+    }
+
+    int emissive_start = spec_end;
+    int num_emissive = emissive_end - emissive_start;
+    if (num_emissive)
+    {
+        int numBlocks = divUp(num_spec, BLOCK_SIZE_1D);
+        shadeMaterialEmissive <<<numBlocks, BLOCK_SIZE_1D >>> (
+              iter
+            , num_emissive
+            , dev_intersections + emissive_start
+            , dev_paths + emissive_start
             , dev_materials
             );
     }

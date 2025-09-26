@@ -15,6 +15,8 @@ __device__ glm::mat3 LocalToWorld(glm::vec3 nor);
 
 // General shading kernel
 __global__ void shadeMaterial(int iter, int num_paths, ShadeableIntersection* shadeableIntersections, PathSegment* pathSegments, Material* materials);
+__global__ void shadeMaterialSpecular(int iter, int num_paths, ShadeableIntersection* shadeableIntersections, PathSegment* pathSegments, Material* materials);
+__global__ void shadeMaterialEmissive(int iter, int num_paths, ShadeableIntersection* shadeableIntersections, PathSegment* pathSegments, Material* materials);
 
 __device__ void scatterRay(
     PathSegment& pathSegment,
