@@ -14,9 +14,23 @@ __device__ void coordinateSystem(glm::vec3 v1, glm::vec3& v2, glm::vec3& v3);
 __device__ glm::mat3 LocalToWorld(glm::vec3 nor);
 
 // General shading kernel
-__global__ void shadeMaterial(int iter, int num_paths, ShadeableIntersection* shadeableIntersections, PathSegment* pathSegments, Material* materials);
-__global__ void shadeMaterialSpecular(int iter, int num_paths, ShadeableIntersection* shadeableIntersections, PathSegment* pathSegments, Material* materials);
-__global__ void shadeMaterialEmissive(int iter, int num_paths, ShadeableIntersection* shadeableIntersections, PathSegment* pathSegments, Material* materials);
+struct ShadeKernelArgs
+{
+    int iter;
+    int num_paths;
+    ShadeableIntersection* shadeableIntersections;
+    PathSegment* pathSegments;
+    Material* materials;
+};
+
+typedef void(*ShadeKernel)(ShadeKernelArgs args);
+
+__host__ ShadeKernel getShadingKernelForMaterial(MaterialType mt);
+
+__global__ void skDiffuse(ShadeKernelArgs args);
+__global__ void skSpecular(ShadeKernelArgs args);
+__global__ void skEmissive(ShadeKernelArgs args);
+__global__ void skRefractive(ShadeKernelArgs args);
 
 __device__ void scatterRay(
     PathSegment& pathSegment,

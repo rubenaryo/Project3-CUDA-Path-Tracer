@@ -42,8 +42,9 @@ enum MaterialType : unsigned int
     MT_SPECULAR,
     MT_EMISSIVE,
     MT_REFRACTIVE,
-    
+
     MT_COUNT,
+    MT_FIRST = 0,
     MT_LAST = MT_COUNT-1,
     MT_INVALID = UINT_MAX,
 };

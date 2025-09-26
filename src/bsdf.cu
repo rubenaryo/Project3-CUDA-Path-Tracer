@@ -43,23 +43,32 @@ __device__ void scatterRay(
     pathSegment.remainingBounces--;
 }
 
-__global__ void shadeMaterial(   
-        int iter
-    ,   int num_paths
-    ,   ShadeableIntersection* shadeableIntersections
-    ,   PathSegment* pathSegments
-    ,   Material* materials
-)
+// By convention: MUST match the order of the MaterialType struct
+static ShadeKernel sKernels[] =
+{
+    skDiffuse,
+    skSpecular,
+    skEmissive,
+    skRefractive
+};
+
+__host__ ShadeKernel getShadingKernelForMaterial(MaterialType mt)
+{
+    assert(mt < MT_COUNT);
+    return sKernels[mt];
+}
+
+__global__ void skDiffuse(ShadeKernelArgs args)
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < num_paths)
+    if (idx < args.num_paths)
     {
-        const PathSegment path = pathSegments[idx];
+        const PathSegment path = args.pathSegments[idx];
         int depth = path.remainingBounces;
         if (depth <= 0)
             return; // Retire this thread early if the ray has gone out of bounds or run out of depth.
 
-        ShadeableIntersection intersection = shadeableIntersections[idx];
+        ShadeableIntersection intersection = args.shadeableIntersections[idx];
         
 #if STREAM_COMPACTION
         assert(intersection.t > FLT_EPSILON); // Stream compaction has removed rays that didn't hit anything by this point
@@ -72,45 +81,64 @@ __global__ void shadeMaterial(
         }
 #endif 
         // Set up RNG to generate xi's
-        thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, depth);
+        thrust::default_random_engine rng = makeSeededRandomEngine(args.iter, idx, depth);
 
-        Material material = materials[intersection.materialId];
+        Material material = args.materials[intersection.materialId];
         glm::vec3 materialColor = material.color;
 
         Ray wo = path.ray;
         glm::vec3 intersect = wo.origin + intersection.t * wo.direction;
-        scatterRay(pathSegments[idx], intersect, intersection.surfaceNormal, material, rng);
+        scatterRay(args.pathSegments[idx], intersect, intersection.surfaceNormal, material, rng);
     }
 }
 
-__global__ void shadeMaterialSpecular(
-      int iter
-    , int num_paths
-    , ShadeableIntersection* shadeableIntersections
-    , PathSegment* pathSegments
-    , Material* materials
-)
+__global__ void skSpecular(ShadeKernelArgs args)
 {
+    // TODO: Using diffuse shading temporarily
 
-}
-
-__global__ void shadeMaterialEmissive(
-    int iter
-    , int num_paths
-    , ShadeableIntersection* shadeableIntersections
-    , PathSegment* pathSegments
-    , Material* materials
-)
-{
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < num_paths)
+    if (idx < args.num_paths)
     {
-        const PathSegment path = pathSegments[idx];
+        const PathSegment path = args.pathSegments[idx];
         int depth = path.remainingBounces;
         if (depth <= 0)
             return; // Retire this thread early if the ray has gone out of bounds or run out of depth.
 
-        ShadeableIntersection intersection = shadeableIntersections[idx];
+        ShadeableIntersection intersection = args.shadeableIntersections[idx];
+
+    #if STREAM_COMPACTION
+        assert(intersection.t > FLT_EPSILON); // Stream compaction has removed rays that didn't hit anything by this point
+    #else
+        if (intersection.t <= 0.0f)
+        {
+            pathSegments[idx].color = glm::vec3(0.0f);
+            pathSegments[idx].remainingBounces = 0;
+            return;
+        }
+    #endif 
+        // Set up RNG to generate xi's
+        thrust::default_random_engine rng = makeSeededRandomEngine(args.iter, idx, depth);
+
+        Material material = args.materials[intersection.materialId];
+        glm::vec3 materialColor = material.color;
+
+        Ray wo = path.ray;
+        glm::vec3 intersect = wo.origin + intersection.t * wo.direction;
+        scatterRay(args.pathSegments[idx], intersect, intersection.surfaceNormal, material, rng);
+    }
+}
+
+__global__ void skEmissive(ShadeKernelArgs args)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < args.num_paths)
+    {
+        const PathSegment path = args.pathSegments[idx];
+        int depth = path.remainingBounces;
+        if (depth <= 0)
+            return; // Retire this thread early if the ray has gone out of bounds or run out of depth.
+
+        ShadeableIntersection intersection = args.shadeableIntersections[idx];
 
     #if STREAM_COMPACTION
         assert(intersection.t > FLT_EPSILON); // Stream compaction has removed rays that didn't hit anything by this point
@@ -123,8 +151,13 @@ __global__ void shadeMaterialEmissive(
         }
     #endif 
 
-        Material material = materials[intersection.materialId];
-        pathSegments[idx].color *= (material.color * material.emittance);
-        pathSegments[idx].remainingBounces = 0; // Mark it for culling later
+        Material material = args.materials[intersection.materialId];
+        args.pathSegments[idx].color *= (material.color * material.emittance);
+        args.pathSegments[idx].remainingBounces = 0; // Mark it for culling later
     }
+}
+
+__global__ void skRefractive(ShadeKernelArgs args)
+{
+    return; // TODO
 }

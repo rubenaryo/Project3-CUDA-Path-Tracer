@@ -312,50 +312,31 @@ __host__ void shadeByMaterialType(int num_paths, int iter)
 
     // For every material type, launch its corresponding kernel
 
-    // TODO: Put this into a loop and index each kernel as a func pointer
-    int diffuse_end = thrust::upper_bound(thrust::device, dev_isectMaterials, dev_isectMaterials + num_paths, MT_DIFFUSE) - dev_isectMaterials;
-    int spec_end    = thrust::upper_bound(thrust::device, dev_isectMaterials, dev_isectMaterials + num_paths, MT_SPECULAR) - dev_isectMaterials;
-    int emissive_end = thrust::upper_bound(thrust::device, dev_isectMaterials, dev_isectMaterials + num_paths, MT_EMISSIVE) - dev_isectMaterials;
+    ShadeKernelArgs skArgs;
+    skArgs.iter = iter;
+    skArgs.materials = dev_materials;
 
-    int num_diffuse = diffuse_end;
-    if (diffuse_end)
-    {
-        int numDiffuseBlocks = divUp(num_diffuse, BLOCK_SIZE_1D);
-        shadeMaterial<<<numDiffuseBlocks, BLOCK_SIZE_1D>>>(
-          iter
-        , num_diffuse
-        , dev_intersections + 0
-        , dev_paths + 0
-        , dev_materials // TODO: already known at kernel invoke time
-        );
-    }
+    void* cudaKernelArgs[] = { &skArgs };
 
-    int spec_start = diffuse_end;
-    int num_spec = spec_end - diffuse_end;
-    if (num_spec)
+    dim3 numBlocks;
+    int prev_end = 0;
+    for (unsigned int m = MT_FIRST; m < MT_COUNT; ++m)
     {
-        int numSpecBlocks = divUp(num_spec, BLOCK_SIZE_1D);
-        shadeMaterial<<<numSpecBlocks, BLOCK_SIZE_1D>>>(
-              iter
-            , num_spec
-            , dev_intersections + spec_start
-            , dev_paths + spec_start
-            , dev_materials
-            );
-    }
+        int mt_end = thrust::upper_bound(thrust::device, dev_isectMaterials + prev_end, dev_isectMaterials + num_paths, (MaterialType)m) - dev_isectMaterials;
+        int mt_start = prev_end;
+        int mt_count = mt_end - mt_start;
+        if (mt_count)
+        {
+            skArgs.num_paths = mt_count;
+            skArgs.pathSegments = dev_paths + mt_start;
+            skArgs.shadeableIntersections = dev_intersections + mt_start;
 
-    int emissive_start = spec_end;
-    int num_emissive = emissive_end - emissive_start;
-    if (num_emissive)
-    {
-        int numBlocks = divUp(num_spec, BLOCK_SIZE_1D);
-        shadeMaterialEmissive <<<numBlocks, BLOCK_SIZE_1D >>> (
-              iter
-            , num_emissive
-            , dev_intersections + emissive_start
-            , dev_paths + emissive_start
-            , dev_materials
-            );
+            numBlocks.x = divUp(mt_count, BLOCK_SIZE_1D);
+            ShadeKernel sk = getShadingKernelForMaterial((MaterialType)m);
+            cudaLaunchKernel(sk, numBlocks, BLOCK_SIZE_1D, cudaKernelArgs, 0, nullptr);
+        }
+
+        prev_end = mt_end;
     }
 }
 
@@ -364,14 +345,16 @@ __host__ void shadeLegacy(int num_paths, int iter)
     // TODO: compare between directly shading the path segments and shading
     // path segments that have been reshuffled to be contiguous in memory.
 
-    dim3 numblocksPathSegmentTracing = (num_paths + BLOCK_SIZE_1D - 1) / BLOCK_SIZE_1D;
-    shadeMaterial<<<numblocksPathSegmentTracing, BLOCK_SIZE_1D >>> (
+    ShadeKernelArgs skArgs = {
           iter
         , num_paths
         , dev_intersections
         , dev_paths
         , dev_materials
-        );
+    };
+
+    dim3 numblocksPathSegmentTracing = (num_paths + BLOCK_SIZE_1D - 1) / BLOCK_SIZE_1D;
+    skDiffuse<<<numblocksPathSegmentTracing, BLOCK_SIZE_1D >>>(skArgs);
 }
 
 __host__ int cullTerminatedPaths(int num_paths)
@@ -433,9 +416,6 @@ void pathtrace(uchar4* pbo, int frame, int iter)
 
     int depth = 0;
     int num_paths = pixelcount;
-
-    PathSegment* dev_path_end = dev_paths + num_paths;
-    PathSegment* dev_path_end_test = dev_paths + (sizeof(PathSegment) * num_paths);
 
     // --- PathSegment Tracing Stage ---
     // Shoot ray into scene, bounce between objects, push shading chunks
