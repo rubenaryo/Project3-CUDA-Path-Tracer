@@ -9,6 +9,9 @@
 
 #define BACKGROUND_COLOR (glm::vec3(0.0f))
 
+#define STREAM_COMPACTION 1
+#define MATERIAL_SORT 1
+
 enum GeomType
 {
     SPHERE,
@@ -33,18 +36,47 @@ struct Geom
     glm::mat4 invTranspose;
 };
 
+enum MaterialType : unsigned int
+{
+    MT_DIFFUSE = 0,
+    MT_SPECULAR,
+    MT_EMISSIVE,
+    MT_REFRACTIVE,
+    
+    MT_COUNT,
+    MT_LAST = MT_COUNT-1,
+    MT_INVALID = UINT_MAX,
+};
+
+template<MaterialType t>
+struct MaterialTypePred
+{
+    __host__ __device__
+    bool operator()(MaterialType type) { return type == t; }
+};
+
+template<MaterialType t>
+struct NotMaterialTypePred
+{
+    __host__ __device__
+    bool operator()(MaterialType type) { return type != t; }
+};
+
 struct Material
 {
     glm::vec3 color;
     struct
     {
-        float exponent;
         glm::vec3 color;
+        float exponent;
     } specular;
+
+    MaterialType type = MT_INVALID;
     float hasReflective;
     float hasRefractive;
     float indexOfRefraction;
     float emittance;
+
 };
 
 struct Camera

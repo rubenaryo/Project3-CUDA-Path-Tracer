@@ -43,12 +43,13 @@ __device__ void scatterRay(
     pathSegment.remainingBounces--;
 }
 
-__global__ void shadeMaterial(
-    int iter,
-    int num_paths,
-    ShadeableIntersection* shadeableIntersections,
-    PathSegment* pathSegments,
-    Material* materials)
+__global__ void shadeMaterial(   
+        int iter
+    ,   int num_paths
+    ,   ShadeableIntersection* shadeableIntersections
+    ,   PathSegment* pathSegments
+    ,   Material* materials
+)
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < num_paths)
@@ -59,40 +60,37 @@ __global__ void shadeMaterial(
             return; // Retire this thread early if the ray has gone out of bounds or run out of depth.
 
         ShadeableIntersection intersection = shadeableIntersections[idx];
-        if (intersection.t > 0.0f) // if the intersection exists...
+        
+#if STREAM_COMPACTION
+        assert(intersection.t > FLT_EPSILON); // Stream compaction has removed rays that didn't hit anything by this point
+#else
+        if (intersection.t <= 0.0f)
         {
-            // Set up the RNG
-            // LOOK: this is how you use thrust's RNG! Please look at
-            // makeSeededRandomEngine as well.
-            thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, depth);
-            thrust::uniform_real_distribution<float> u01(0, 1);
+            pathSegments[idx].color = glm::vec3(0.0f);
+            pathSegments[idx].remainingBounces = 0;
+            return;
+        }
+#endif 
+        // Set up RNG to generate xi's
+        thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, depth);
+        thrust::uniform_real_distribution<float> u01(0, 1);
 
-            Material material = materials[intersection.materialId];
-            glm::vec3 materialColor = material.color;
+        Material material = materials[intersection.materialId];
+        glm::vec3 materialColor = material.color;
 
-            // If the material indicates that the object was a light, "light" the ray
-            if (material.emittance > 0.0f)
-            {
-                pathSegments[idx].color *= (materialColor * material.emittance);
-                pathSegments[idx].remainingBounces = 0; // Mark it for culling later
-            }
-            else
-            {
-
-                PathSegment path = pathSegments[idx];
-                Ray wo = path.ray;
-                glm::vec3 intersect = wo.origin + intersection.t * wo.direction;
-                scatterRay(pathSegments[idx], intersect, intersection.surfaceNormal, material, rng);
-            }
+        // If the material indicates that the object was a light, "light" the ray
+        if (material.emittance > 0.0f)
+        {
+            pathSegments[idx].color *= (materialColor * material.emittance);
+            pathSegments[idx].remainingBounces = 0; // Mark it for culling later
         }
         else
         {
-            // If there was no intersection, color the ray black.
-            // Lots of renderers use 4 channel color, RGBA, where A = alpha, often
-            // used for opacity, in which case they can indicate "no opacity".
-            // This can be useful for post-processing and image compositing.
-            pathSegments[idx].color = glm::vec3(0.0f);
-            pathSegments[idx].remainingBounces = 0;
+
+            PathSegment path = pathSegments[idx];
+            Ray wo = path.ray;
+            glm::vec3 intersect = wo.origin + intersection.t * wo.direction;
+            scatterRay(pathSegments[idx], intersect, intersection.surfaceNormal, material, rng);
         }
     }
 }

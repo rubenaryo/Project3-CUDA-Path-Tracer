@@ -1,20 +1,21 @@
 #include "intersections.h"
 
 /// Kernel to label each intersection with additional information to be used for ray sorting and discarding
-__global__ void flagIntersections(int N, const ShadeableIntersection* isects, IntersectionFlag* flags)
+__global__ void flagIntersections(int N, const ShadeableIntersection* isects, Material* mats, MaterialType* flags)
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= N)
         return;
 
     const ShadeableIntersection isect = isects[idx];
-    if (isect.t >= 0.0f)
+    if (isect.t > FLT_EPSILON)
     {
-        flags[idx] = IF_OPAQUE; // TODO: opaque/translucent passes
+        const Material mat = mats[isect.materialId];
+        flags[idx] = mat.type;
     }
     else
     {
-        flags[idx] = IF_NONINTERSECT; // Probably unnecessary if we init the whole array to this value.
+        flags[idx] = MT_INVALID;
     }
 }
 
