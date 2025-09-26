@@ -58,7 +58,7 @@ __global__ void shadeMaterial(
         if (depth <= 0)
             return; // Retire this thread early if the ray has gone out of bounds or run out of depth.
 
-        ShadeableIntersection intersection = shadeableIntersections[path.pixelIndex];
+        ShadeableIntersection intersection = shadeableIntersections[idx];
         if (intersection.t > 0.0f) // if the intersection exists...
         {
             // Set up the RNG
@@ -74,7 +74,7 @@ __global__ void shadeMaterial(
             if (material.emittance > 0.0f)
             {
                 pathSegments[idx].color *= (materialColor * material.emittance);
-                pathSegments[idx].remainingBounces = 0;
+                pathSegments[idx].remainingBounces = 0; // Mark it for culling later
             }
             else
             {

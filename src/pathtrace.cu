@@ -6,6 +6,7 @@
 
 #include <thrust/device_vector.h>
 #include <thrust/execution_policy.h>
+#include <thrust/partition.h>
 #include <thrust/random.h>
 #include <thrust/remove.h>
 #include <thrust/sequence.h>
@@ -217,6 +218,7 @@ __global__ void computeIntersections(
         if (hit_geom_index == -1)
         {
             intersections[path_index].t = -1.0f;
+            pathSegments[path_index].color = glm::vec3(0.0f); // This gmem read might be really bad.
         }
         else
         {
@@ -240,10 +242,18 @@ __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iteration
     }
 }
 
-struct IntersectPred
-{
+struct Intersecting {
     __host__ __device__
-    bool operator()(const ShadeableIntersection& s) { return s.t < -0.95f;}
+        bool operator()(const thrust::tuple<PathSegment, ShadeableIntersection>& t) const {
+        return thrust::get<1>(t).t > 0.0f;
+    }
+};
+
+struct NonTerminated {
+    __host__ __device__
+        bool operator()(const PathSegment& ps) const {
+        return ps.remainingBounces > 0;
+    }
 };
 
 /**
@@ -312,6 +322,8 @@ void pathtrace(uchar4* pbo, int frame, int iter)
     // --- PathSegment Tracing Stage ---
     // Shoot ray into scene, bounce between objects, push shading chunks
 
+#define STREAM_COMPACTION 1
+
     bool iterationComplete = false;
     while (!iterationComplete)
     {
@@ -332,45 +344,39 @@ void pathtrace(uchar4* pbo, int frame, int iter)
         cudaDeviceSynchronize();
         depth++;
 
+#if STREAM_COMPACTION
+        auto zip_it = thrust::make_zip_iterator(thrust::make_tuple(dev_paths, dev_intersections));
+        auto zip_it_end = zip_it + num_paths;
+        zip_it_end = thrust::partition(thrust::device, zip_it, zip_it_end, Intersecting());
+        num_paths = zip_it_end - zip_it;
+        dev_path_end = dev_paths + num_paths;
+
+        if (num_paths == 0)
+        {
+            break;
+        }
+#endif
         // Flag intersections as Opaque, Translucent, or Non-intersecting
         //flagIntersections<<<numblocksPathSegmentTracing, blockSize1d>>>(pixelcount, dev_intersections, dev_intersectFlags);        
-        
-        // Trim master path list by removing non-intersections
-        //dev_path_end = thrust::remove_if(thrust::device, dev_paths, dev_path_end, dev_intersectFlags, IntersectionPred<IF_NONINTERSECT>());
-        //num_paths = dev_path_end - dev_paths;
 
-        // Similarly trim flag list (INVESTIGATE: zip iterators?)
-        // dev_flags_end = thrust::remove_if(thrust::device, dev_intersectFlags, dev_flags_end, IntersectionPred<IF_NONINTERSECT>());
-        // num_flags = dev_flags_end - dev_intersectFlags;
-
-        // INVESTIGATE: Is it worth compacting the ShadeableIntersections array as well?
-
-        //dim3 numValidPaths = (num_paths + blockSize1d - 1) / blockSize1d;
-
-        // Copy opaque intersections to the opaque collection (using flags as stencil)
-        //dev_opaque_path_end = thrust::copy_if(thrust::device, dev_paths, dev_path_end, dev_intersectFlags, dev_opaquePaths, IntersectionPred<IF_OPAQUE>());
-        //num_opaque_paths = dev_opaque_path_end - dev_opaquePaths;
-        //
-        //dim3 numOpaqueBlocks = (num_opaque_paths + blockSize1d - 1) / blockSize1d;
-
-        // TODO:
-        // --- Shading Stage ---
-        // Shade path segments based on intersections and generate new rays by
-        // evaluating the BSDF.
-        // Start off with just a big kernel that handles all the different
-        // materials you have in the scenefile.
         // TODO: compare between directly shading the path segments and shading
         // path segments that have been reshuffled to be contiguous in memory.
 
         // Opaque Shading Pass
-        shadeMaterial<<<num_paths, blockSize1d>>>(
+        numblocksPathSegmentTracing = (num_paths + blockSize1d - 1) / blockSize1d;
+        shadeMaterial<<<numblocksPathSegmentTracing, blockSize1d>>>(
             iter,
             num_paths,
             dev_intersections,
             dev_paths,
             dev_materials
         );
-        iterationComplete = depth >= traceDepth; // TODO: should be based off stream compaction results.
+
+#if STREAM_COMPACTION
+        dev_path_end = thrust::partition(thrust::device, dev_paths, dev_path_end, NonTerminated());
+        num_paths = dev_path_end - dev_paths;
+#endif
+        iterationComplete = depth >= traceDepth || num_paths == 0; // TODO: should be based off stream compaction results.
 
         if (guiData != NULL)
         {
