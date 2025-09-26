@@ -293,12 +293,10 @@ __host__ int sortByMaterialType(int num_paths)
     thrust::sort_by_key(thrust::device, dev_isectMaterials, dev_isectMaterials + num_paths, zip_it);
     
     int numBlocks = utilityCore::divUp(num_paths, BLOCK_SIZE_1D);
-    //testKernel<<<numBlocks, BLOCK_SIZE_1D>>>(num_paths, dev_paths, dev_intersections, dev_isectMaterials);
 
     // Binary search to find the partition point after which all paths are invalid
     MaterialType* firstInvalid_it = thrust::lower_bound(thrust::device,
         dev_isectMaterials, dev_isectMaterials + num_paths, MT_INVALID);
-
 
     // Return the new number of paths
     return firstInvalid_it - dev_isectMaterials;
@@ -330,6 +328,8 @@ __host__ void shadeByMaterialType(int num_paths, int iter)
             skArgs.num_paths = mt_count;
             skArgs.pathSegments = dev_paths + mt_start;
             skArgs.shadeableIntersections = dev_intersections + mt_start;
+
+            // TODO: Maybe subsequent sort by material id?
 
             numBlocks.x = divUp(mt_count, BLOCK_SIZE_1D);
             ShadeKernel sk = getShadingKernelForMaterial((MaterialType)m);
