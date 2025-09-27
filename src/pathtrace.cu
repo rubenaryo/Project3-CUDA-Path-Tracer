@@ -189,7 +189,7 @@ __global__ void computeIntersections(
     
     PathSegment& path = pathSegments[path_index];
     ShadeableIntersection& result = intersections[path_index];
-    testAllIntersections(path_index, path, geoms, geoms_size, result);
+    sceneIntersect(path, geoms, geoms_size, result);
 }
 
 // Add the current iteration's output to the overall image
@@ -278,6 +278,8 @@ __host__ void shadeByMaterialType(int num_paths, int iter)
     skArgs.materials = dev_materials;
     skArgs.lights = dev_lights;
     skArgs.num_lights = hst_scene->lights.size();
+    skArgs.geoms = dev_geoms;
+    skArgs.num_geoms = hst_scene->geoms.size();
 
     void* cudaKernelArgs[] = { &skArgs };
 

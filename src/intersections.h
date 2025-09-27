@@ -75,8 +75,7 @@ __host__ __device__ float sphereIntersectionTest(
     bool& outside);
 
 // Writes result to intersections
-__device__ void testAllIntersections(
-    int idx,
+__device__ void sceneIntersect(
     PathSegment& path,
     const Geom* geoms,
     int geoms_size,

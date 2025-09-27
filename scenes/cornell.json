@@ -97,9 +97,9 @@
 		{
             "TYPE":"AREA",
 			"GEOMTYPE":"RECT",
-			"EMITTANCE":5.0,
+			"EMITTANCE":3.0,
 			"RGB":[1.0,1.0,1.0],
-            "TRANS":[0.0,10.0,0.0],
+            "TRANS":[0.0,8.5,0.0],
             "ROTAT":[0.0,0.0,0.0],
             "SCALE":[3.0,0.3,3.0]
         }

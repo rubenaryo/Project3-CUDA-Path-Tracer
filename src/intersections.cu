@@ -131,7 +131,7 @@ __host__ __device__ float sphereIntersectionTest(
     return glm::length(r.origin - intersectionPoint);
 }
 
-__device__ void testAllIntersections(int idx, PathSegment& path, const Geom* geoms, int geoms_size, ShadeableIntersection& result)
+__device__ void sceneIntersect(PathSegment& path, const Geom* geoms, int geoms_size, ShadeableIntersection& result)
 {
     float t;
     glm::vec3 intersect_point;

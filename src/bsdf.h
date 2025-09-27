@@ -24,6 +24,8 @@ struct ShadeKernelArgs
     Material* materials;
     Light* lights;
     int num_lights;
+    Geom* geoms;
+    int num_geoms;
 };
 
 typedef void(*ShadeKernel)(ShadeKernelArgs args);
