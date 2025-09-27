@@ -11,6 +11,7 @@
 
 #define STREAM_COMPACTION 1
 #define MATERIAL_SORT 1
+#define STOCHASTIC_AA 1
 
 typedef uint32_t LightID;
 typedef uint16_t MaterialID;

@@ -7,6 +7,7 @@
 #include <thrust/random.h>
 
 // TODO some of these don't exist anymore
+__device__ thrust::default_random_engine makeSeededRandomEngine(int iter, int index, int depth);
 __device__ glm::vec3 squareToDiskConcentric(glm::vec2 xi);
 __device__ glm::vec3 squareToHemisphereCosine(const glm::vec2& xi);
 __device__ Ray SpawnRay(const glm::vec3& pos, const glm::vec3& wi);

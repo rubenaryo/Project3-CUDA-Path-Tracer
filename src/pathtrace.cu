@@ -152,22 +152,32 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
     int x = (blockIdx.x * blockDim.x) + threadIdx.x;
     int y = (blockIdx.y * blockDim.y) + threadIdx.y;
 
-    if (x < cam.resolution.x && y < cam.resolution.y) {
-        int index = x + (y * cam.resolution.x);
-        PathSegment& segment = pathSegments[index];
+    if (x >= cam.resolution.x || y >= cam.resolution.y)
+        return;
 
-        segment.ray.origin = cam.position;
-        segment.color = glm::vec3(1.0f, 1.0f, 1.0f);
+    int index = x + (y * cam.resolution.x);
+    PathSegment& segment = pathSegments[index];
 
-        // TODO: implement antialiasing by jittering the ray
-        segment.ray.direction = glm::normalize(cam.view
-            - cam.right * cam.pixelLength.x * ((float)x - (float)cam.resolution.x * 0.5f)
-            - cam.up * cam.pixelLength.y * ((float)y - (float)cam.resolution.y * 0.5f)
-        );
+    segment.ray.origin = cam.position;
+    segment.color = glm::vec3(1.0f, 1.0f, 1.0f);
 
-        segment.pixelIndex = index;
-        segment.remainingBounces = traceDepth;
-    }
+#if STOCHASTIC_AA
+    thrust::default_random_engine rng = makeSeededRandomEngine(iter, index, traceDepth);
+    thrust::uniform_real_distribution<float> uH(-0.5f, 0.5f);
+
+    segment.ray.direction = glm::normalize(cam.view
+        - cam.right * cam.pixelLength.x * ((float)x + uH(rng) - (float)cam.resolution.x * 0.5f)
+        - cam.up * cam.pixelLength.y * ((float)y + uH(rng) - (float)cam.resolution.y * 0.5f)
+    );
+#else
+    segment.ray.direction = glm::normalize(cam.view
+        - cam.right * cam.pixelLength.x * ((float)x - (float)cam.resolution.x * 0.5f)
+        - cam.up * cam.pixelLength.y * ((float)y - (float)cam.resolution.y * 0.5f)
+    );
+#endif
+
+    segment.pixelIndex = index;
+    segment.remainingBounces = traceDepth;
 }
 
 // TODO:
