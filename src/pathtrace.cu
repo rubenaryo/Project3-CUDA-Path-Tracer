@@ -78,6 +78,7 @@ static GuiDataContainer* guiData = NULL;
 static glm::vec3* dev_image = NULL;
 static Geom* dev_geoms = NULL;
 static Material* dev_materials = NULL;
+static AreaLight* dev_areaLights = NULL;
 static PathSegment* dev_paths = NULL;
 static PathSegment* dev_opaquePaths = NULL;
 static ShadeableIntersection* dev_intersections = NULL;
@@ -113,6 +114,9 @@ void pathtraceInit(Scene* scene)
     cudaMalloc(&dev_materials, scene->materials.size() * sizeof(Material));
     cudaMemcpy(dev_materials, scene->materials.data(), scene->materials.size() * sizeof(Material), cudaMemcpyHostToDevice);
 
+    cudaMalloc(&dev_areaLights, scene->areaLights.size() * sizeof(AreaLight));
+    cudaMemcpy(dev_areaLights, scene->areaLights.data(), scene->areaLights.size() * sizeof(AreaLight), cudaMemcpyHostToDevice);
+
     cudaMalloc(&dev_intersections, pixelcount * sizeof(ShadeableIntersection));
     cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 
@@ -128,6 +132,7 @@ void pathtraceFree()
     cudaFree(dev_paths);
     cudaFree(dev_geoms);
     cudaFree(dev_materials);
+    cudaFree(dev_areaLights);
     cudaFree(dev_intersections);
     cudaFree(dev_sortKeys);
 

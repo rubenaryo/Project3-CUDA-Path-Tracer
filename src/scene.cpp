@@ -79,6 +79,18 @@ void Scene::loadFromJSON(const std::string& jsonName)
             newGeom.type = SPHERE;
         }
         newGeom.materialid = MatNameToID[p["MATERIAL"]];
+
+        const Material& mat = materials[newGeom.materialid];
+        if (mat.type == MT_EMISSIVE)
+        {
+            // This is a light. Need to hold it in a separate collection
+            AreaLight al;
+            al.id = areaLights.size();
+            al.color = mat.color;
+            al.Le = mat.emittance;
+            areaLights.push_back(al);
+        }
+
         const auto& trans = p["TRANS"];
         const auto& rotat = p["ROTAT"];
         const auto& scale = p["SCALE"];

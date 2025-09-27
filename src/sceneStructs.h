@@ -12,6 +12,44 @@
 #define STREAM_COMPACTION 1
 #define MATERIAL_SORT 1
 
+typedef uint32_t LightID;
+typedef uint16_t MaterialID;
+typedef uint32_t MaterialSortKey;
+static const MaterialSortKey SORTKEY_INVALID = UINT32_MAX;
+
+enum MaterialType : uint16_t
+{
+    MT_DIFFUSE = 0,
+    MT_SPECULAR,
+    MT_EMISSIVE,
+    MT_REFRACTIVE,
+
+    MT_COUNT,
+    MT_FIRST = 0,
+    MT_LAST = MT_COUNT - 1,
+    MT_INVALID = UINT16_MAX,
+};
+
+template<MaterialType t>
+struct MaterialTypePred
+{
+    __host__ __device__
+        bool operator()(MaterialType type) { return type == t; }
+};
+
+template<MaterialType t>
+struct NotMaterialTypePred
+{
+    __host__ __device__
+        bool operator()(MaterialType type) { return type != t; }
+};
+
+__host__ __device__
+static MaterialSortKey BuildSortKey(MaterialType type, MaterialID id)
+{
+    return (MaterialSortKey)type << 16 | (MaterialSortKey)id;
+}
+
 enum GeomType
 {
     SPHERE,
@@ -27,7 +65,7 @@ struct Ray
 struct Geom
 {
     enum GeomType type;
-    int materialid;
+    MaterialID materialid;
     glm::vec3 translation;
     glm::vec3 rotation;
     glm::vec3 scale;
@@ -36,42 +74,12 @@ struct Geom
     glm::mat4 invTranspose;
 };
 
-enum MaterialType : uint16_t
+struct AreaLight : Geom
 {
-    MT_DIFFUSE = 0,
-    MT_SPECULAR,
-    MT_EMISSIVE,
-    MT_REFRACTIVE,
-
-    MT_COUNT,
-    MT_FIRST = 0,
-    MT_LAST = MT_COUNT-1,
-    MT_INVALID = UINT16_MAX,
+    glm::vec3 color;
+    float Le;
+    LightID id;
 };
-
-template<MaterialType t>
-struct MaterialTypePred
-{
-    __host__ __device__
-    bool operator()(MaterialType type) { return type == t; }
-};
-
-template<MaterialType t>
-struct NotMaterialTypePred
-{
-    __host__ __device__
-    bool operator()(MaterialType type) { return type != t; }
-};
-
-typedef uint16_t MaterialID;
-typedef uint32_t MaterialSortKey;
-static const MaterialSortKey SORTKEY_INVALID = UINT32_MAX;
-
-__host__ __device__
-static MaterialSortKey BuildSortKey(MaterialType type, MaterialID id)
-{
-    return (MaterialSortKey)type << 16 | (MaterialSortKey)id;
-}
 
 struct Material
 {
