@@ -41,25 +41,25 @@ inline __device__ Ray SpawnRay(const glm::vec3& pos, const glm::vec3& wi)
     return r;
 }
 
-inline __device__ glm::vec3 DiffuseBSDF(const glm::vec3& albedo)
+////////////////////////
+// f / Samplef functions
+
+inline __device__ glm::vec3 f_diffuse(const glm::vec3& albedo)
 {
     return albedo * INV_PI;
 }
 
-__device__ void scatterRay(
-    PathSegment& pathSegment,
-    glm::vec3 intersect,
-    glm::vec3 normal,
-    const Material& m,
-    thrust::default_random_engine& rng)
+inline __device__ glm::vec3 Sample_f_diffuse(const glm::vec3& albedo, const glm::vec3& norW, thrust::default_random_engine& rng, glm::vec3& out_wiW, float& out_pdf)
 {
-
+    out_wiW = calculateRandomDirectionInHemisphere(norW, rng);
+    out_pdf = glm::abs(glm::dot(out_wiW, norW)) * INV_PI;
+    return f_diffuse(albedo);
 }
 
 // By convention: MUST match the order of the MaterialType struct
 static ShadeKernel sKernels[] =
 {
-    skDiffuseDirect,
+    skDiffuse,
     skSpecular,
     skEmissive,
     skRefractive
@@ -98,7 +98,7 @@ __global__ void skDiffuse(ShadeKernelArgs args)
     thrust::default_random_engine rng = makeSeededRandomEngine(args.iter, idx, path.remainingBounces);
 
     glm::vec3 wi = calculateRandomDirectionInHemisphere(intersection.surfaceNormal, rng);
-    glm::vec3 bsdf = DiffuseBSDF(material.color);
+    glm::vec3 bsdf = f_diffuse(material.color);
     glm::vec3 lightTransportResult = bsdf * PI; // Normally (bsdf*lambert)/pdf but this is simplified
 
     args.pathSegments[idx].color *= lightTransportResult;
@@ -123,7 +123,7 @@ __global__ void skDiffuseDirect(ShadeKernelArgs args)
     float pdf;
     glm::vec3 view_point = path.ray.origin + (intersection.t * path.ray.direction);
     glm::vec3 totalDirectLight(0.0f);
-    glm::vec3 bsdf = DiffuseBSDF(material.color);
+    glm::vec3 bsdf = f_diffuse(material.color);
     const int NUM_SAMPLES = 4;
     for (int s = 0; s != NUM_SAMPLES; ++s)
     {
@@ -147,6 +147,32 @@ __global__ void skDiffuseDirect(ShadeKernelArgs args)
     
     args.pathSegments[idx].color *= totalDirectLight;
     args.pathSegments[idx].remainingBounces = 0;
+}
+
+__global__ void skDiffuseFull(ShadeKernelArgs args)
+{
+    // TODO_MIS
+    
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= args.num_paths)
+        return;
+
+    const PathSegment path = args.pathSegments[idx];
+    const ShadeableIntersection intersection = args.shadeableIntersections[idx];
+    const Material material = args.materials[intersection.materialId];
+
+    HANDLE_MISS(idx, intersection, pathSegments);
+
+    thrust::default_random_engine rng = makeSeededRandomEngine(args.iter, idx, path.remainingBounces);
+
+    glm::vec3 wiW;
+    float pdf;
+    glm::vec3 bsdf = Sample_f_diffuse(material.color, intersection.surfaceNormal, rng, wiW, pdf);
+    glm::vec3 lightTransportResult = bsdf * PI; // Normally (bsdf*lambert)/pdf but this is simplified
+
+    args.pathSegments[idx].color *= lightTransportResult;
+    args.pathSegments[idx].ray = SpawnRay(path.ray.origin + intersection.t * path.ray.direction, wiW);
+    args.pathSegments[idx].remainingBounces--;
 }
 
 __global__ void skSpecular(ShadeKernelArgs args)

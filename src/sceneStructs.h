@@ -90,7 +90,6 @@ struct Light
     glm::vec3 scale;
 
     glm::vec3 color = glm::vec3(0.0f);
-    //glm::vec2 extents = glm::vec2(0.0f); // For rectangular area lights
     
     float emittance;
     LightID id;
@@ -142,6 +141,7 @@ struct PathSegment
     glm::vec3 color;
     int pixelIndex;
     int remainingBounces;
+    bool prev_was_specular = false;
 };
 
 // Use with a corresponding PathSegment to do:

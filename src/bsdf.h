@@ -14,6 +14,9 @@ __device__ float squareToHemisphereCosinePDF(const glm::vec3& sample);
 __device__ void coordinateSystem(const glm::vec3& v1, glm::vec3& v2, glm::vec3& v3);
 __device__ glm::mat3 LocalToWorld(glm::vec3 nor);
 
+// Sample_f / f functions
+__device__ glm::vec3 Sample_f_diffuse(const glm::vec3& albedo, const glm::vec3& norW, thrust::default_random_engine& rng, glm::vec3& out_wiW, float& out_pdf);
+
 // General shading kernel
 struct ShadeKernelArgs
 {
@@ -34,13 +37,7 @@ __host__ ShadeKernel getShadingKernelForMaterial(MaterialType mt);
 
 __global__ void skDiffuse(ShadeKernelArgs args);
 __global__ void skDiffuseDirect(ShadeKernelArgs args);
+__global__ void skDiffuseFull(ShadeKernelArgs args);
 __global__ void skSpecular(ShadeKernelArgs args);
 __global__ void skEmissive(ShadeKernelArgs args);
 __global__ void skRefractive(ShadeKernelArgs args);
-
-__device__ void scatterRay(
-    PathSegment& pathSegment,
-    glm::vec3 intersect,
-    glm::vec3 normal,
-    const Material& m,
-    thrust::default_random_engine& rng);

@@ -74,10 +74,17 @@ __host__ __device__ float sphereIntersectionTest(
     glm::vec3& normal,
     bool& outside);
 
-// Writes result to intersections
 __device__ void sceneIntersect(
     PathSegment& path,
     const Geom* geoms,
     int geoms_size,
     ShadeableIntersection& result
+);
+
+__device__ void lightsIntersect(
+    PathSegment& path,
+    const Light* lights,
+    int lights_size,
+    ShadeableIntersection& result,
+    LightID& resultId
 );
