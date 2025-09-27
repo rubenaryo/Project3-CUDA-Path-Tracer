@@ -10,14 +10,14 @@ __device__ glm::vec3 DirectSampleAreaLight(glm::vec3 view_point, glm::vec3 view_
 	{
 	case CUBE:
 		{
-			thrust::uniform_real_distribution<float> u01(0, 1);
-			glm::vec4 randPosLocal(u01(rng), u01(rng), 0.0f, 0.0f);
+			thrust::uniform_real_distribution<float> u01(-0.5f, 0.5f);
+			glm::vec4 randPosLocal(u01(rng), u01(rng), u01(rng), 0.0f); // TODO: this is just a position within the cube.. I need to do it on a face-by-face basis.
 			glm::vec4 norLocal(0.0f, 0.0f, 1.0f, 0.0f);
 
 			glm::vec3 randPosWorld(chosenLight.transform * randPosLocal);
 			glm::vec3 norWorld(chosenLight.transform * norLocal);
 
-			float surfaceArea = 4.0f; // TODO: This seems wrong?
+			float surfaceArea = 8.0f; // TODO: This seems wrong?
 			float areaPDF = 1.0f / surfaceArea;
 
 			glm::vec3 lightToSurface = view_point - randPosWorld;
@@ -27,13 +27,12 @@ __device__ glm::vec3 DirectSampleAreaLight(glm::vec3 view_point, glm::vec3 view_
 				return glm::vec3(0.0f);
 
 			lightToSurface /= r;
-			float cosTheta = glm::dot(norWorld, lightToSurface); // try normalize norWorld if something looks off
+			float cosTheta = glm::abs(glm::dot(norWorld, lightToSurface)); // try normalize norWorld if something looks off
 
 			out_wiW = -lightToSurface;
 			if (cosTheta < FLT_EPSILON)
 			{
 				out_pdf = 0.0f;
-				return glm::vec3(0.0f);
 			}
 			else
 				out_pdf = (r*r / cosTheta) * areaPDF;
@@ -44,7 +43,8 @@ __device__ glm::vec3 DirectSampleAreaLight(glm::vec3 view_point, glm::vec3 view_
 		// TODO
 	}
 
-	return chosenLight.Le * numLights * chosenLight.color;
+	float Le = chosenLight.Le;
+	return Le * numLights * chosenLight.color;
 }
 
 __device__ glm::vec3 Sample_Li(glm::vec3 view_point, glm::vec3 nor, AreaLight* areaLights, int numLights, thrust::default_random_engine& rng, glm::vec3& out_wiW, float& out_pdf)

@@ -59,7 +59,7 @@ __device__ void scatterRay(
 // By convention: MUST match the order of the MaterialType struct
 static ShadeKernel sKernels[] =
 {
-    skDiffuse,
+    skDiffuseDirect,
     skSpecular,
     skEmissive,
     skRefractive
@@ -109,28 +109,37 @@ __global__ void skDiffuse(ShadeKernelArgs args)
 __global__ void skDiffuseDirect(ShadeKernelArgs args)
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < args.num_paths)
+    if (idx >= args.num_paths)
         return;
 
     const PathSegment path = args.pathSegments[idx];
-    int depth = path.remainingBounces;
-    if (depth <= 0)
-        return; // Retire this thread early if the ray has gone out of bounds or run out of depth.
-
     const ShadeableIntersection intersection = args.shadeableIntersections[idx];
     const Material material = args.materials[intersection.materialId];
-    thrust::default_random_engine rng = makeSeededRandomEngine(args.iter, idx, depth);
+    thrust::default_random_engine rng = makeSeededRandomEngine(args.iter, idx, path.remainingBounces);
 
     HANDLE_MISS(idx, intersection, pathSegments);
 
-    glm::vec3 wo = -path.ray.direction;
     glm::vec3 wiW;
     float pdf;
     glm::vec3 view_point = path.ray.origin + (intersection.t * path.ray.direction);
-    glm::vec3 bsdf = material.color * Sample_Li(view_point, intersection.surfaceNormal, args.areaLights, args.num_lights, rng, wiW, pdf);
+    glm::vec3 totalDirectLight(0.0f);
+    glm::vec3 bsdf = DiffuseBSDF(material.color);
+    const int NUM_SAMPLES = 4;
+    for (int s = 0; s != NUM_SAMPLES; ++s)
+    {
+        glm::vec3 liResult = Sample_Li(view_point, intersection.surfaceNormal, args.areaLights, args.num_lights, rng, wiW, pdf);
+        if (pdf < FLT_EPSILON)
+        {
+            s--;
+            continue;
+        }
 
-    float lambert = glm::abs(glm::dot(wiW, intersection.surfaceNormal));
-    args.pathSegments[idx].color *= bsdf * lambert / pdf;
+        float lambert = glm::abs(glm::dot(wiW, intersection.surfaceNormal));
+        totalDirectLight += liResult * lambert * bsdf / (NUM_SAMPLES * pdf);
+    }
+    
+    
+    args.pathSegments[idx].color *= totalDirectLight;
     args.pathSegments[idx].remainingBounces = 0;
 }
 
