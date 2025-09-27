@@ -21,6 +21,8 @@ struct ShadeKernelArgs
     ShadeableIntersection* shadeableIntersections;
     PathSegment* pathSegments;
     Material* materials;
+    AreaLight* areaLights;
+    int num_lights;
 };
 
 typedef void(*ShadeKernel)(ShadeKernelArgs args);

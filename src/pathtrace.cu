@@ -320,9 +320,12 @@ __host__ void shadeByMaterialType(int num_paths, int iter)
 
     // For every material type, launch its corresponding kernel
 
+    // These args stay the same across all rays.
     ShadeKernelArgs skArgs;
     skArgs.iter = iter;
     skArgs.materials = dev_materials;
+    skArgs.areaLights = dev_areaLights;
+    skArgs.num_lights = hst_scene->areaLights.size();
 
     void* cudaKernelArgs[] = { &skArgs };
 
@@ -330,11 +333,13 @@ __host__ void shadeByMaterialType(int num_paths, int iter)
     int prev_end = 0;
     for (unsigned int m = MT_FIRST; m < MT_COUNT; ++m)
     {
+        // Find the index range for this material
         MaterialSortKey maxKey = BuildSortKey((MaterialType)m, UINT16_MAX);
         int mt_end = thrust::upper_bound(thrust::device, dev_sortKeys + prev_end, dev_sortKeys + num_paths, maxKey) - dev_sortKeys;
         int mt_start = prev_end;
         int mt_count = mt_end - mt_start;
         
+        // If there are rays for this material type, dispatch them all together in the same kernel
         if (mt_count)
         {
             skArgs.num_paths = mt_count;
