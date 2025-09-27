@@ -1,7 +1,7 @@
 #include "intersections.h"
 
 /// Kernel to label each intersection with additional information to be used for ray sorting and discarding
-__global__ void flagIntersections(int N, const ShadeableIntersection* isects, Material* mats, MaterialType* flags)
+__global__ void generateSortKeys(int N, const ShadeableIntersection* isects, Material* mats, MaterialSortKey* sortKeys)
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= N)
@@ -11,11 +11,11 @@ __global__ void flagIntersections(int N, const ShadeableIntersection* isects, Ma
     if (isect.t > FLT_EPSILON)
     {
         const Material mat = mats[isect.materialId];
-        flags[idx] = mat.type;
+        sortKeys[idx] = BuildSortKey(mat.type, isect.materialId);
     }
     else
     {
-        flags[idx] = MT_INVALID;
+        sortKeys[idx] = SORTKEY_INVALID;
     }
 }
 

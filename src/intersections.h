@@ -20,7 +20,7 @@ __host__ __device__ inline unsigned int utilhash(unsigned int a)
     return a;
 }
 
-__global__ void flagIntersections(int N, const ShadeableIntersection* isects, Material* mats, MaterialType* flags);
+__global__ void generateSortKeys(int N, const ShadeableIntersection* isects, Material* mats, MaterialSortKey* flags);
 
 // CHECKITOUT
 /**

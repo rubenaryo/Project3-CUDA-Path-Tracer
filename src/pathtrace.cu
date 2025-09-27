@@ -81,7 +81,7 @@ static Material* dev_materials = NULL;
 static PathSegment* dev_paths = NULL;
 static PathSegment* dev_opaquePaths = NULL;
 static ShadeableIntersection* dev_intersections = NULL;
-static MaterialType* dev_isectMaterials = NULL;  // Parallel array of flags to mark material type.
+static MaterialSortKey* dev_sortKeys = NULL;  // Parallel array of flags to mark material type.
 
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
@@ -116,8 +116,8 @@ void pathtraceInit(Scene* scene)
     cudaMalloc(&dev_intersections, pixelcount * sizeof(ShadeableIntersection));
     cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 
-    cudaMalloc(&dev_isectMaterials, pixelcount * sizeof(MaterialType));
-    thrust::fill(thrust::device, dev_isectMaterials, dev_isectMaterials + pixelcount, MT_INVALID);
+    cudaMalloc(&dev_sortKeys, pixelcount * sizeof(MaterialSortKey));
+    thrust::fill(thrust::device, dev_sortKeys, dev_sortKeys + pixelcount, SORTKEY_INVALID);
 
     checkCUDAError("pathtraceInit");
 }
@@ -129,7 +129,7 @@ void pathtraceFree()
     cudaFree(dev_geoms);
     cudaFree(dev_materials);
     cudaFree(dev_intersections);
-    cudaFree(dev_isectMaterials);
+    cudaFree(dev_sortKeys);
 
     checkCUDAError("pathtraceFree");
 }
@@ -247,13 +247,15 @@ __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iteration
     }
 }
 
-struct Intersecting {
+struct MaterialIdComp {
+    
+    using PathIsectTuple = thrust::tuple<PathSegment, ShadeableIntersection>;
+    
     __host__ __device__
-        bool operator()(const thrust::tuple<PathSegment, ShadeableIntersection>& t) const {
-        return thrust::get<1>(t).t > FLT_EPSILON;
+    bool operator()(const PathIsectTuple& a, const PathIsectTuple& b) const {
+        return thrust::get<1>(a).materialId < thrust::get<1>(b).materialId;
     }
 };
-
 struct NonTerminated {
     __host__ __device__
         bool operator()(PathSegment& ps) {
@@ -268,42 +270,45 @@ struct Terminated {
     }
 };
 
-__global__ void testKernel(int N, PathSegment* paths, ShadeableIntersection* isects, MaterialType* isectMaterials)
+__global__ void testKernel(int N, PathSegment* paths, ShadeableIntersection* isects, MaterialSortKey* sortKeys)
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= N)
         return;
 
-    MaterialType thisMat = isectMaterials[idx];
+    MaterialSortKey thisMat = sortKeys[idx];
+
+    const PathSegment path = paths[idx];
+    paths[idx] = path;
 
     
 
-    MaterialType* dummy = isectMaterials + N;
+    MaterialSortKey* dummy = sortKeys + N;
 }
 
-/// Sorts the PathSegment and Intersection arrays by material type (dev_isectMaterials)
+/// Sorts the PathSegment and Intersection arrays by material type (dev_sortKeys)
 /// Returns the new number of paths after discarding the non-intersections at the end of the array
 __host__ int sortByMaterialType(int num_paths)
 {
     typedef thrust::zip_iterator<cuda::std::tuple<PathSegment*, ShadeableIntersection*>> ZipIterator;
 
     // Sort both arrays together as a zip_iterator
-    // This also sorts the keys (dev_isectMaterials)
+    // This also sorts the keys (dev_sortKeys)
     ZipIterator zip_it = thrust::make_zip_iterator(thrust::make_tuple(dev_paths, dev_intersections));
-    thrust::sort_by_key(thrust::device, dev_isectMaterials, dev_isectMaterials + num_paths, zip_it);
-    
+    thrust::sort_by_key(thrust::device, dev_sortKeys, dev_sortKeys + num_paths, zip_it);
+
     int numBlocks = utilityCore::divUp(num_paths, BLOCK_SIZE_1D);
 
     // Binary search to find the partition point after which all paths are invalid
-    MaterialType* firstInvalid_it = thrust::lower_bound(thrust::device,
-        dev_isectMaterials, dev_isectMaterials + num_paths, MT_INVALID);
+    MaterialSortKey* firstInvalid_it = thrust::lower_bound(thrust::device,
+        dev_sortKeys, dev_sortKeys + num_paths, SORTKEY_INVALID);
 
     // Return the new number of paths
-    return firstInvalid_it - dev_isectMaterials;
+    return firstInvalid_it - dev_sortKeys;
 }
 
 
-// Note: Assumes dev_isectMaterials has been sorted already by sortByMaterialType
+// Note: Assumes dev_sortKeys has been sorted already by sortByMaterialType
 __host__ void shadeByMaterialType(int num_paths, int iter)
 {
     using utilityCore::divUp;
@@ -320,20 +325,21 @@ __host__ void shadeByMaterialType(int num_paths, int iter)
     int prev_end = 0;
     for (unsigned int m = MT_FIRST; m < MT_COUNT; ++m)
     {
-        int mt_end = thrust::upper_bound(thrust::device, dev_isectMaterials + prev_end, dev_isectMaterials + num_paths, (MaterialType)m) - dev_isectMaterials;
+        MaterialSortKey maxKey = BuildSortKey((MaterialType)m, UINT16_MAX);
+        int mt_end = thrust::upper_bound(thrust::device, dev_sortKeys + prev_end, dev_sortKeys + num_paths, maxKey) - dev_sortKeys;
         int mt_start = prev_end;
         int mt_count = mt_end - mt_start;
+        
         if (mt_count)
         {
             skArgs.num_paths = mt_count;
             skArgs.pathSegments = dev_paths + mt_start;
             skArgs.shadeableIntersections = dev_intersections + mt_start;
 
-            // TODO: Maybe subsequent sort by material id?
-
             numBlocks.x = divUp(mt_count, BLOCK_SIZE_1D);
             ShadeKernel sk = getShadingKernelForMaterial((MaterialType)m);
             cudaLaunchKernel(sk, numBlocks, BLOCK_SIZE_1D, cudaKernelArgs, 0, nullptr);
+            checkCUDAError("cudaLaunchKernel: shadingKernel");
         }
 
         prev_end = mt_end;
@@ -442,12 +448,13 @@ void pathtrace(uchar4* pbo, int frame, int iter)
 
     #if STREAM_COMPACTION || MATERIAL_SORT
         // Flag intersections by material type. We will use this to sort the path and isect arrays
-        flagIntersections<<<numblocksPathSegmentTracing, BLOCK_SIZE_1D>>>(num_paths, dev_intersections, dev_materials, dev_isectMaterials);
-        
+        generateSortKeys<<<numblocksPathSegmentTracing, BLOCK_SIZE_1D>>>(num_paths, dev_intersections, dev_materials, dev_sortKeys);
+        checkCUDAError("generateSortKeys");
     #endif
 
     #if MATERIAL_SORT
         int new_num_paths = sortByMaterialType(num_paths);
+        checkCUDAError("sortByMaterialType");
         // TODO_WAVEFRONT: use new_num_paths to determine how many rays to regenerate.
         num_paths = new_num_paths;
 
@@ -457,13 +464,12 @@ void pathtrace(uchar4* pbo, int frame, int iter)
 
     #if MATERIAL_SORT
         shadeByMaterialType(num_paths, iter);
+        checkCUDAError("shadeByMaterialType");
     #else
         shadeLegacy(num_paths, iter);
     #endif
 
     #if STREAM_COMPACTION
-        //int numBlocks = utilityCore::divUp(num_paths, BLOCK_SIZE_1D);
-        //testKernel<<<numBlocks, BLOCK_SIZE_1D>>>(num_paths, dev_paths, dev_intersections, dev_isectMaterials);
         num_paths = cullTerminatedPaths(num_paths);
         // TODO_WAVEFRONT: Regenerate paths
     #endif

@@ -36,7 +36,7 @@ struct Geom
     glm::mat4 invTranspose;
 };
 
-enum MaterialType : unsigned int
+enum MaterialType : uint16_t
 {
     MT_DIFFUSE = 0,
     MT_SPECULAR,
@@ -46,7 +46,7 @@ enum MaterialType : unsigned int
     MT_COUNT,
     MT_FIRST = 0,
     MT_LAST = MT_COUNT-1,
-    MT_INVALID = UINT_MAX,
+    MT_INVALID = UINT16_MAX,
 };
 
 template<MaterialType t>
@@ -62,6 +62,16 @@ struct NotMaterialTypePred
     __host__ __device__
     bool operator()(MaterialType type) { return type != t; }
 };
+
+typedef uint16_t MaterialID;
+typedef uint32_t MaterialSortKey;
+static const MaterialSortKey SORTKEY_INVALID = UINT32_MAX;
+
+__host__ __device__
+static MaterialSortKey BuildSortKey(MaterialType type, MaterialID id)
+{
+    return (MaterialSortKey)type << 16 | (MaterialSortKey)id;
+}
 
 struct Material
 {
@@ -116,5 +126,5 @@ struct ShadeableIntersection
 {
   float t;
   glm::vec3 surfaceNormal;
-  int materialId;
+  MaterialID materialId;
 };
