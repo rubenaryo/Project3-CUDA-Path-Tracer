@@ -1,5 +1,6 @@
 #include "bsdf.h"
 
+#include "light.h"
 #include "utilities.h"
 #include "intersections.h"
 #include "interactions.h"
@@ -90,6 +91,36 @@ __global__ void skDiffuse(ShadeKernelArgs args)
         glm::vec3 intersect = wo.origin + intersection.t * wo.direction;
         scatterRay(args.pathSegments[idx], intersect, intersection.surfaceNormal, material, rng);
     }
+}
+
+__global__ void skDiffuseDirect(ShadeKernelArgs args)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < args.num_paths)
+        return;
+
+    const PathSegment path = args.pathSegments[idx];
+    int depth = path.remainingBounces;
+    if (depth <= 0)
+        return; // Retire this thread early if the ray has gone out of bounds or run out of depth.
+
+    const ShadeableIntersection intersection = args.shadeableIntersections[idx];
+    const Material material = args.materials[intersection.materialId];
+    thrust::default_random_engine rng = makeSeededRandomEngine(args.iter, idx, depth);
+
+#if STREAM_COMPACTION
+    assert(intersection.t > FLT_EPSILON); // Stream compaction has removed rays that didn't hit anything by this point
+#endif
+
+    glm::vec3 wo = -path.ray.direction;
+    glm::vec3 wiW;
+    float pdf;
+    glm::vec3 view_point = path.ray.origin + (intersection.t * path.ray.direction);
+    glm::vec3 bsdf = material.color * Sample_Li(view_point, intersection.surfaceNormal, args.areaLights, args.num_lights, rng, wiW, pdf);
+
+    float lambert = glm::abs(glm::dot(wiW, intersection.surfaceNormal));
+    args.pathSegments[idx].color *= bsdf * lambert / pdf;
+    args.pathSegments[idx].remainingBounces = 0;
 }
 
 __global__ void skSpecular(ShadeKernelArgs args)

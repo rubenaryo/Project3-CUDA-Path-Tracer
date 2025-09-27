@@ -6,6 +6,7 @@
 #include <cuda_runtime.h>
 #include <thrust/random.h>
 
+// TODO some of these don't exist anymore
 __device__ glm::vec3 squareToDiskConcentric(glm::vec2 xi);
 __device__ glm::vec3 squareToHemisphereCosine(const glm::vec2& xi);
 __device__ Ray SpawnRay(const glm::vec3& pos, const glm::vec3& wi);
@@ -30,6 +31,7 @@ typedef void(*ShadeKernel)(ShadeKernelArgs args);
 __host__ ShadeKernel getShadingKernelForMaterial(MaterialType mt);
 
 __global__ void skDiffuse(ShadeKernelArgs args);
+__global__ void skDiffuseDirect(ShadeKernelArgs args);
 __global__ void skSpecular(ShadeKernelArgs args);
 __global__ void skEmissive(ShadeKernelArgs args);
 __global__ void skRefractive(ShadeKernelArgs args);

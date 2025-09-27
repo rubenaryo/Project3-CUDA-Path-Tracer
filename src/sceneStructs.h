@@ -76,9 +76,12 @@ struct Geom
 
 struct AreaLight : Geom
 {
-    glm::vec3 color;
-    float Le;
-    LightID id;
+    AreaLight() {}
+    AreaLight(const Geom& g) : Geom(g) {}
+
+    glm::vec3 color = glm::vec3(0.0f);
+    float Le = 0.0f;
+    LightID id = 0;
 };
 
 struct Material

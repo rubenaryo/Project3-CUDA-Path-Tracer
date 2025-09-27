@@ -80,17 +80,6 @@ void Scene::loadFromJSON(const std::string& jsonName)
         }
         newGeom.materialid = MatNameToID[p["MATERIAL"]];
 
-        const Material& mat = materials[newGeom.materialid];
-        if (mat.type == MT_EMISSIVE)
-        {
-            // This is a light. Need to hold it in a separate collection
-            AreaLight al;
-            al.id = areaLights.size();
-            al.color = mat.color;
-            al.Le = mat.emittance;
-            areaLights.push_back(al);
-        }
-
         const auto& trans = p["TRANS"];
         const auto& rotat = p["ROTAT"];
         const auto& scale = p["SCALE"];
@@ -101,6 +90,17 @@ void Scene::loadFromJSON(const std::string& jsonName)
             newGeom.translation, newGeom.rotation, newGeom.scale);
         newGeom.inverseTransform = glm::inverse(newGeom.transform);
         newGeom.invTranspose = glm::inverseTranspose(newGeom.transform);
+        
+        const Material& mat = materials[newGeom.materialid];
+        if (mat.type == MT_EMISSIVE)
+        {
+            // This is a light. Need to hold it in a separate collection
+            AreaLight al(newGeom);
+            al.id = areaLights.size();
+            al.color = mat.color;
+            al.Le = mat.emittance;
+            areaLights.push_back(al);
+        }
 
         geoms.push_back(newGeom);
     }
