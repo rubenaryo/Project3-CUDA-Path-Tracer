@@ -11,7 +11,7 @@ public:
     Scene(std::string filename);
 
     std::vector<Geom> geoms;
-    std::vector<AreaLight> areaLights;
+    std::vector<Light> lights;
     std::vector<Material> materials;
     RenderState state;
 };

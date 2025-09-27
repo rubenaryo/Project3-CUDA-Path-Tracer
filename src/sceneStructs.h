@@ -52,8 +52,16 @@ static MaterialSortKey BuildSortKey(MaterialType type, MaterialID id)
 
 enum GeomType
 {
-    SPHERE,
-    CUBE
+    GT_INVALID,
+    GT_SPHERE,
+    GT_CUBE,
+    GT_RECT
+};
+
+enum LightType
+{
+    LT_INVALID,
+    LT_AREA
 };
 
 struct Ray
@@ -74,14 +82,20 @@ struct Geom
     glm::mat4 invTranspose;
 };
 
-struct AreaLight : Geom
+struct Light
 {
-    AreaLight() {}
-    AreaLight(const Geom& g) : Geom(g) {}
+    glm::mat4 transform;
+    glm::vec3 translation;
+    glm::vec3 rotation;
+    glm::vec3 scale;
 
     glm::vec3 color = glm::vec3(0.0f);
-    float Le = 0.0f;
-    LightID id = 0;
+    //glm::vec2 extents = glm::vec2(0.0f); // For rectangular area lights
+    
+    float emittance;
+    LightID id;
+    LightType type;
+    GeomType geomType;
 };
 
 struct Material

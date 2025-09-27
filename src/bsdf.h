@@ -22,7 +22,7 @@ struct ShadeKernelArgs
     ShadeableIntersection* shadeableIntersections;
     PathSegment* pathSegments;
     Material* materials;
-    AreaLight* areaLights;
+    Light* lights;
     int num_lights;
 };
 

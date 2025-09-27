@@ -78,7 +78,7 @@ static GuiDataContainer* guiData = NULL;
 static glm::vec3* dev_image = NULL;
 static Geom* dev_geoms = NULL;
 static Material* dev_materials = NULL;
-static AreaLight* dev_areaLights = NULL;
+static Light* dev_lights = NULL;
 static PathSegment* dev_paths = NULL;
 static PathSegment* dev_opaquePaths = NULL;
 static ShadeableIntersection* dev_intersections = NULL;
@@ -114,8 +114,8 @@ void pathtraceInit(Scene* scene)
     cudaMalloc(&dev_materials, scene->materials.size() * sizeof(Material));
     cudaMemcpy(dev_materials, scene->materials.data(), scene->materials.size() * sizeof(Material), cudaMemcpyHostToDevice);
 
-    cudaMalloc(&dev_areaLights, scene->areaLights.size() * sizeof(AreaLight));
-    cudaMemcpy(dev_areaLights, scene->areaLights.data(), scene->areaLights.size() * sizeof(AreaLight), cudaMemcpyHostToDevice);
+    cudaMalloc(&dev_lights, scene->lights.size() * sizeof(Light));
+    cudaMemcpy(dev_lights, scene->lights.data(), scene->lights.size() * sizeof(Light), cudaMemcpyHostToDevice);
 
     cudaMalloc(&dev_intersections, pixelcount * sizeof(ShadeableIntersection));
     cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
@@ -132,7 +132,7 @@ void pathtraceFree()
     cudaFree(dev_paths);
     cudaFree(dev_geoms);
     cudaFree(dev_materials);
-    cudaFree(dev_areaLights);
+    cudaFree(dev_lights);
     cudaFree(dev_intersections);
     cudaFree(dev_sortKeys);
 
@@ -204,11 +204,11 @@ __global__ void computeIntersections(
         {
             Geom& geom = geoms[i];
 
-            if (geom.type == CUBE)
+            if (geom.type == GT_CUBE)
             {
                 t = boxIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
             }
-            else if (geom.type == SPHERE)
+            else if (geom.type == GT_SPHERE)
             {
                 t = sphereIntersectionTest(geom, pathSegment.ray, tmp_intersect, tmp_normal, outside);
             }
@@ -324,8 +324,8 @@ __host__ void shadeByMaterialType(int num_paths, int iter)
     ShadeKernelArgs skArgs;
     skArgs.iter = iter;
     skArgs.materials = dev_materials;
-    skArgs.areaLights = dev_areaLights;
-    skArgs.num_lights = hst_scene->areaLights.size();
+    skArgs.lights = dev_lights;
+    skArgs.num_lights = hst_scene->lights.size();
 
     void* cudaKernelArgs[] = { &skArgs };
 

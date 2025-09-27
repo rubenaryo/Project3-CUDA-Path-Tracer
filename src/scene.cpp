@@ -72,11 +72,11 @@ void Scene::loadFromJSON(const std::string& jsonName)
         Geom newGeom;
         if (type == "cube")
         {
-            newGeom.type = CUBE;
+            newGeom.type = GT_CUBE;
         }
         else
         {
-            newGeom.type = SPHERE;
+            newGeom.type = GT_SPHERE;
         }
         newGeom.materialid = MatNameToID[p["MATERIAL"]];
 
@@ -90,20 +90,46 @@ void Scene::loadFromJSON(const std::string& jsonName)
             newGeom.translation, newGeom.rotation, newGeom.scale);
         newGeom.inverseTransform = glm::inverse(newGeom.transform);
         newGeom.invTranspose = glm::inverseTranspose(newGeom.transform);
-        
-        const Material& mat = materials[newGeom.materialid];
-        if (mat.type == MT_EMISSIVE)
-        {
-            // This is a light. Need to hold it in a separate collection
-            AreaLight al(newGeom);
-            al.id = areaLights.size();
-            al.color = mat.color;
-            al.Le = mat.emittance;
-            areaLights.push_back(al);
-        }
 
         geoms.push_back(newGeom);
     }
+    const auto& lightsData = data["Lights"];
+    for (const auto& p : lightsData)
+    {
+        const auto& col = p["RGB"];
+
+        Light newLight = {};
+        newLight.emittance = p["EMITTANCE"];
+        newLight.color = glm::vec3(col[0], col[1], col[2]);
+
+        if (p["TYPE"] == "AREA")
+        {
+            newLight.type = LT_AREA;
+        }
+
+        const auto& trans = p["TRANS"];
+        const auto& rotat = p["ROTAT"];
+        const auto& scale = p["SCALE"];
+
+        newLight.translation = glm::vec3(trans[0], trans[1], trans[2]);
+        newLight.rotation = glm::vec3(rotat[0], rotat[1], rotat[2]);
+        newLight.scale = glm::vec3(scale[0], scale[1], scale[2]);
+        newLight.transform = utilityCore::buildTransformationMatrix(
+            newLight.translation, newLight.rotation, newLight.scale);
+
+        // CUBE not supported
+        const auto& geom = p["GEOMTYPE"];
+        if (geom == "RECT")
+            newLight.geomType = GT_RECT;
+        else if (geom == "SPHERE")
+            newLight.geomType = GT_SPHERE;
+        else
+            newLight.geomType = GT_INVALID;
+
+        newLight.id = lights.size();
+        lights.push_back(newLight);
+    }
+
     const auto& cameraData = data["Camera"];
     Camera& camera = state.camera;
     RenderState& state = this->state;

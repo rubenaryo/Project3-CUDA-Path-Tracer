@@ -127,15 +127,14 @@ __global__ void skDiffuseDirect(ShadeKernelArgs args)
     const int NUM_SAMPLES = 4;
     for (int s = 0; s != NUM_SAMPLES; ++s)
     {
-        glm::vec3 liResult = Sample_Li(view_point, intersection.surfaceNormal, args.areaLights, args.num_lights, rng, wiW, pdf);
+        glm::vec3 liResult = Sample_Li(view_point, intersection.surfaceNormal, args.lights, args.num_lights, rng, wiW, pdf);
         if (pdf < FLT_EPSILON)
         {
-            s--;
             continue;
         }
 
         float lambert = glm::abs(glm::dot(wiW, intersection.surfaceNormal));
-        totalDirectLight += liResult * lambert * bsdf / (NUM_SAMPLES * pdf);
+        totalDirectLight += bsdf * liResult * lambert / (NUM_SAMPLES * pdf);
     }
     
     
