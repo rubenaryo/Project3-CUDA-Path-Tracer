@@ -73,3 +73,12 @@ __host__ __device__ float sphereIntersectionTest(
     glm::vec3& intersectionPoint,
     glm::vec3& normal,
     bool& outside);
+
+// Writes result to intersections
+__device__ void testAllIntersections(
+    int idx,
+    PathSegment& path,
+    const Geom* geoms,
+    int geoms_size,
+    ShadeableIntersection& result
+);

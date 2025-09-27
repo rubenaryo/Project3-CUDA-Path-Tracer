@@ -133,6 +133,8 @@ __global__ void skDiffuseDirect(ShadeKernelArgs args)
             continue;
         }
 
+        Ray shadowRay = SpawnRay(view_point, wiW);
+
         float lambert = glm::abs(glm::dot(wiW, intersection.surfaceNormal));
         totalDirectLight += bsdf * liResult * lambert / (NUM_SAMPLES * pdf);
     }

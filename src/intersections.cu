@@ -130,3 +130,58 @@ __host__ __device__ float sphereIntersectionTest(
 
     return glm::length(r.origin - intersectionPoint);
 }
+
+__device__ void testAllIntersections(int idx, PathSegment& path, const Geom* geoms, int geoms_size, ShadeableIntersection& result)
+{
+    float t;
+    glm::vec3 intersect_point;
+    glm::vec3 normal;
+    float t_min = FLT_MAX;
+    int hit_geom_index = -1;
+    bool outside = true;
+
+    glm::vec3 tmp_intersect;
+    glm::vec3 tmp_normal;
+
+    const PathSegment pathCopy = path;
+
+    // naive parse through global geoms
+
+    for (int i = 0; i < geoms_size; i++)
+    {
+        const Geom& geom = geoms[i];
+
+        if (geom.type == GT_CUBE)
+        {
+            t = boxIntersectionTest(geom, pathCopy.ray, tmp_intersect, tmp_normal, outside);
+        }
+        else if (geom.type == GT_SPHERE)
+        {
+            t = sphereIntersectionTest(geom, pathCopy.ray, tmp_intersect, tmp_normal, outside);
+        }
+        // TODO: add more intersection tests here... triangle? metaball? CSG?
+
+        // Compute the minimum t from the intersection tests to determine what
+        // scene geometry object was hit first.
+        if (t > 0.0f && t_min > t)
+        {
+            t_min = t;
+            hit_geom_index = i;
+            intersect_point = tmp_intersect;
+            normal = tmp_normal;
+        }
+    }
+
+    if (hit_geom_index == -1)
+    {
+        result.t = -1.0f;
+        path.color = glm::vec3(0.0f); // This gmem read might be really bad.
+    }
+    else
+    {
+        // The ray hits something
+        result.t = t_min;
+        result.materialId = geoms[hit_geom_index].materialid;
+        result.surfaceNormal = normal;
+    }
+}
