@@ -56,6 +56,7 @@ set(headers
     src/glslUtility.hpp
     src/pathtrace.h
     src/bsdf.h
+	src/light.h
     src/scene.h
     src/sceneStructs.h
     src/utilities.h
@@ -70,6 +71,7 @@ set(sources
     src/intersections.cu
     src/interactions.cu
     src/bsdf.cu
+	src/light.cu
     src/scene.cpp
     src/utilities.cpp
 )

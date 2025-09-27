@@ -14,3 +14,4 @@ project, and we will not be able to grade you without a good README.
 ## Additional Files 
 Added to CMakeLists.txt in addition to those from the base code.
 - bsdf.h/cu 
+- light.h/cu
