@@ -18,4 +18,4 @@ public:
     RenderState state;
 };
 
-__host__ int loadGLTF(const std::string& filename, std::vector<Mesh>& meshes);
+__host__ int loadGLTF(const std::string& relPath, std::vector<Mesh>& meshes);

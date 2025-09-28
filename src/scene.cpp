@@ -103,8 +103,8 @@ void Scene::loadFromJSON(const std::string& jsonName)
         else if (type == "mesh")
         {
             newGeom.type = GT_MESH;
-            const auto& fileName = p["PATH"];
-            int meshId = loadGLTF(fileName, meshes);
+            const auto& relPath = p["PATH"];
+            int meshId = loadGLTF(relPath, meshes);
 
             if (meshId == -1)
                 continue; // Mesh loading failed. Don't add it.
@@ -214,18 +214,22 @@ std::vector<T> getBufferData(const tinygltf::Model& model, int accessorIndex)
 }
 
 // Returns mesh id
-__host__ int loadGLTF(const std::string& filename, std::vector<Mesh>& meshes)
+__host__ int loadGLTF(const std::string& relPath, std::vector<Mesh>& meshes)
 {
     tinygltf::Model model;
     tinygltf::TinyGLTF loader;
     std::string err, warn;
 
-    bool result = loader.LoadASCIIFromFile(&model, &err, &warn, filename);
+    std::string absolutePath;
+    std::filesystem::path filePath(relPath);
+    absolutePath = std::filesystem::absolute(filePath).string();
+
+    bool result = loader.LoadASCIIFromFile(&model, &err, &warn, absolutePath);
     if (!result) 
-        result = loader.LoadBinaryFromFile(&model, &err, &warn, filename);
+        result = loader.LoadBinaryFromFile(&model, &err, &warn, absolutePath);
 
     if (!result) {
-        std::cerr << "Failed to load glTF: " << filename << std::endl;
+        std::cerr << "Failed to load glTF: " << absolutePath << std::endl;
         return -1;
     }
 

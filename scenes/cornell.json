@@ -97,7 +97,7 @@
             "TRANS":[0.0,0.0,0.0],
             "ROTAT":[0.0,0.0,0.0],
             "SCALE":[1.0,1.0,1.0],
-			"PATH":"C:/Users/Ruben/Code/CIS5650/Project3-CUDA-Path-Tracer/scenes/meshes/Fox/Fox.gltf"
+			"PATH":"../scenes/meshes/Fox/Fox.gltf"
         }
     ],
 	"Lights":
