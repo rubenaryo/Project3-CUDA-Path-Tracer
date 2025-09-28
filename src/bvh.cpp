@@ -22,6 +22,7 @@ __host__ void GrowAABB(const glm::vec3* vertices, int vtx_count, AABB& aabb)
 }
 
 #define MAX_DEPTH 10
+#define MIN_TRIS_PER_LEAF 4
 __host__ void Split(uint32_t parentIdx, std::vector<BVHNode>& allNodes, Mesh& mesh, int depth)
 {
     if (depth >= MAX_DEPTH)
@@ -32,8 +33,8 @@ __host__ void Split(uint32_t parentIdx, std::vector<BVHNode>& allNodes, Mesh& me
     uint32_t parentTriIndex = parentCopy.triIndex;
     uint32_t parentTriCount = parentCopy.triCount;
 
-    if (parentTriCount == 0)
-        return; // There are no tris, do nothing
+    if (parentTriCount <= MIN_TRIS_PER_LEAF)
+        return; // There aren't enough triangles, it's not worth subdividing
 
     glm::vec3 extent = allNodes[parentIdx].bounds.max - allNodes[parentIdx].bounds.min;
     uint32_t splitAxis = extent.x > glm::max(extent.y, extent.z) ? 0 : extent.y > extent.z ? 1 : 2;
@@ -42,9 +43,10 @@ __host__ void Split(uint32_t parentIdx, std::vector<BVHNode>& allNodes, Mesh& me
     // Create child nodes
     uint32_t childAIdx = allNodes.size();
     uint32_t childBIdx = childAIdx + 1;
+    allNodes[parentIdx].childIndex = childAIdx;
 
-    BVHNode childA;
-    BVHNode childB;
+    BVHNode& childA = allNodes.emplace_back();
+    BVHNode& childB = allNodes.emplace_back();
 
     childA.triIndex = parentTriIndex;
     childB.triIndex = parentTriIndex;
@@ -83,16 +85,8 @@ __host__ void Split(uint32_t parentIdx, std::vector<BVHNode>& allNodes, Mesh& me
         }
     }
 
-    // Ensure that there is a need to subdivide at all before adding A and B to the collection.
-    if (childA.triCount > 0 && childB.triCount > 0)
-    {
-        allNodes.push_back(childA);
-        allNodes.push_back(childB);
-
-        allNodes[parentIdx].childIndex = childAIdx;
-        Split(childAIdx, allNodes, mesh, depth + 1);
-        Split(childBIdx, allNodes, mesh, depth + 1);
-    }
+    Split(childAIdx, allNodes, mesh, depth + 1);
+    Split(childBIdx, allNodes, mesh, depth + 1);
 }
 
 __host__ bool BuildBVH(Mesh& mesh, std::vector<BVHNode>& allNodes)
