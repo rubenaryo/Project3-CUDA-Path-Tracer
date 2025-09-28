@@ -80,8 +80,8 @@ static Geom* dev_geoms = NULL;
 static Material* dev_materials = NULL;
 static Light* dev_lights = NULL;
 static Mesh* dev_meshes = NULL;
+static BVHNode* dev_bvhNodes = NULL;
 static PathSegment* dev_paths = NULL;
-static PathSegment* dev_opaquePaths = NULL;
 static ShadeableIntersection* dev_intersections = NULL;
 static MaterialSortKey* dev_sortKeys = NULL;  // Parallel array of flags to mark material type.
 
@@ -107,7 +107,6 @@ void pathtraceInit(Scene* scene)
     cudaMemset(dev_image, 0, pixelcount * sizeof(glm::vec3));
 
     cudaMalloc(&dev_paths, pixelcount * sizeof(PathSegment));
-    cudaMalloc(&dev_opaquePaths, pixelcount * sizeof(PathSegment));
 
     cudaMalloc(&dev_geoms, scene->geoms.size() * sizeof(Geom));
     cudaMemcpy(dev_geoms, scene->geoms.data(), scene->geoms.size() * sizeof(Geom), cudaMemcpyHostToDevice);
@@ -121,12 +120,14 @@ void pathtraceInit(Scene* scene)
     cudaMalloc(&dev_meshes, scene->deviceMeshes.size() * sizeof(Mesh)); // Only support one mesh for now.
     cudaMemcpy(dev_meshes, scene->deviceMeshes.data(), scene->deviceMeshes.size() * sizeof(Mesh), cudaMemcpyHostToDevice);
 
+    cudaMalloc(&dev_bvhNodes, scene->bvhNodes.size() * sizeof(BVHNode));
+    cudaMemcpy(dev_bvhNodes, scene->bvhNodes.data(), scene->bvhNodes.size() * sizeof(BVHNode), cudaMemcpyHostToDevice);
+
     cudaMalloc(&dev_intersections, pixelcount * sizeof(ShadeableIntersection));
     cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 
     cudaMalloc(&dev_sortKeys, pixelcount * sizeof(MaterialSortKey));
     thrust::fill(thrust::device, dev_sortKeys, dev_sortKeys + pixelcount, SORTKEY_INVALID);
-
 
     checkCUDAError("pathtraceInit");
 }
@@ -139,6 +140,7 @@ void pathtraceFree()
     cudaFree(dev_materials);
     cudaFree(dev_lights);
     cudaFree(dev_meshes);
+    cudaFree(dev_bvhNodes);
     cudaFree(dev_intersections);
     cudaFree(dev_sortKeys);
 
