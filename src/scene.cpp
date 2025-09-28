@@ -5,6 +5,7 @@
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtx/string_cast.hpp>
 #include "json.hpp"
+#include "tinygltf_include.h"
 
 #include <fstream>
 #include <iostream>
@@ -68,16 +69,7 @@ void Scene::loadFromJSON(const std::string& jsonName)
     const auto& objectsData = data["Objects"];
     for (const auto& p : objectsData)
     {
-        const auto& type = p["TYPE"];
         Geom newGeom;
-        if (type == "cube")
-        {
-            newGeom.type = GT_CUBE;
-        }
-        else
-        {
-            newGeom.type = GT_SPHERE;
-        }
         newGeom.materialid = MatNameToID[p["MATERIAL"]];
 
         const auto& trans = p["TRANS"];
@@ -90,6 +82,22 @@ void Scene::loadFromJSON(const std::string& jsonName)
             newGeom.translation, newGeom.rotation, newGeom.scale);
         newGeom.inverseTransform = glm::inverse(newGeom.transform);
         newGeom.invTranspose = glm::inverseTranspose(newGeom.transform);
+
+        const auto& type = p["TYPE"];
+        if (type == "cube")
+        {
+            newGeom.type = GT_CUBE;
+        }
+        else if (type == "sphere")
+        {
+            newGeom.type = GT_SPHERE;
+        }
+        else if (type == "mesh")
+        {
+            newGeom.type = GT_MESH;
+            const auto& fileName = p["PATH"];
+            bool loadResult = loadGLTF(fileName, meshes);
+        }
 
         geoms.push_back(newGeom);
     }
@@ -162,4 +170,133 @@ void Scene::loadFromJSON(const std::string& jsonName)
     int arraylen = camera.resolution.x * camera.resolution.y;
     state.image.resize(arraylen);
     std::fill(state.image.begin(), state.image.end(), glm::vec3());
+}
+
+template<typename T>
+std::vector<T> getBufferData(const tinygltf::Model& model, int accessorIndex)
+{
+    if (accessorIndex < 0) return {};
+
+    const auto& accessor = model.accessors[accessorIndex];
+    const auto& bufferView = model.bufferViews[accessor.bufferView];
+    const auto& buffer = model.buffers[bufferView.buffer];
+
+    const uint8_t* data = buffer.data.data() + bufferView.byteOffset + accessor.byteOffset;
+
+    std::vector<T> result;
+    result.resize(accessor.count);
+
+    if (bufferView.byteStride == 0 || bufferView.byteStride == sizeof(T)) {
+        // Tightly packed data
+        std::memcpy(result.data(), data, accessor.count * sizeof(T));
+    }
+    else {
+        // Strided data
+        for (size_t i = 0; i < accessor.count; ++i) {
+            std::memcpy(&result[i], data + i * bufferView.byteStride, sizeof(T));
+        }
+    }
+
+    return result;
+}
+
+bool loadGLTF(const std::string& filename, std::vector<Mesh>& meshes)
+{
+    tinygltf::Model model;
+    tinygltf::TinyGLTF loader;
+    std::string err;
+    std::string warn;
+
+    bool ret = loader.LoadASCIIFromFile(&model, &err, &warn, filename);
+    if (!ret) {
+        ret = loader.LoadBinaryFromFile(&model, &err, &warn, filename);
+    }
+
+    if (!err.empty()) {
+        std::cerr << "glTF error: " << err << std::endl;
+    }
+    if (!warn.empty()) {
+        std::cerr << "glTF warning: " << warn << std::endl;
+    }
+    if (!ret) {
+        std::cerr << "Failed to load glTF file: " << filename << std::endl;
+        return false;
+    }
+
+    meshes.clear();
+
+    for (const auto& mesh : model.meshes) {
+        for (const auto& primitive : mesh.primitives) {
+            Mesh meshData;
+
+            if (primitive.attributes.find("POSITION") != primitive.attributes.end()) {
+                int posAccessor = primitive.attributes.at("POSITION");
+                meshData.vtx = getBufferData<glm::vec3>(model, posAccessor);
+            }
+
+            if (primitive.attributes.find("NORMAL") != primitive.attributes.end()) {
+                int normalAccessor = primitive.attributes.at("NORMAL");
+                meshData.nor = getBufferData<glm::vec3>(model, normalAccessor);
+            }
+
+            if (primitive.attributes.find("TEXCOORD_0") != primitive.attributes.end()) {
+                int uvAccessor = primitive.attributes.at("TEXCOORD_0");
+                meshData.uv = getBufferData<glm::vec2>(model, uvAccessor);
+            }
+
+            if (primitive.indices >= 0) {
+                const auto& accessor = model.accessors[primitive.indices];
+
+                if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT) {
+                    auto indices16 = getBufferData<uint16_t>(model, primitive.indices);
+                    meshData.idx.reserve(indices16.size() / 3);
+                    for (size_t i = 0; i < indices16.size(); i += 3) {
+                        meshData.idx.push_back(glm::uvec3(indices16[i], indices16[i + 1], indices16[i + 2]));
+                    }
+                }
+                else if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT) {
+                    auto indices32 = getBufferData<uint32_t>(model, primitive.indices);
+                    meshData.idx.reserve(indices32.size() / 3);
+                    for (size_t i = 0; i < indices32.size(); i += 3) {
+                        meshData.idx.push_back(glm::uvec3(indices32[i], indices32[i + 1], indices32[i + 2]));
+                    }
+                }
+            }
+
+            if (meshData.vtx.empty()) {
+                std::cerr << "Warning: Mesh has no vertices" << std::endl;
+                continue;
+            }
+
+            if (meshData.nor.empty() && !meshData.idx.empty()) {
+                meshData.nor.resize(meshData.vtx.size(), glm::vec3(0.0f));
+
+                for (const auto& tri : meshData.idx) {
+                    glm::vec3 v0 = meshData.vtx[tri.x];
+                    glm::vec3 v1 = meshData.vtx[tri.y];
+                    glm::vec3 v2 = meshData.vtx[tri.z];
+
+                    glm::vec3 normal = glm::normalize(glm::cross(v1 - v0, v2 - v0));
+
+                    meshData.nor[tri.x] += normal;
+                    meshData.nor[tri.y] += normal;
+                    meshData.nor[tri.z] += normal;
+                }
+
+                for (auto& normal : meshData.nor) {
+                    normal = glm::normalize(normal);
+                }
+            }
+
+            // Ensure UVs exist
+            if (meshData.uv.size() != meshData.vtx.size()) {
+                meshData.uv.resize(meshData.vtx.size(), glm::vec2(0.0f));
+            }
+
+            meshes.push_back(std::move(meshData));
+        }
+    }
+
+    std::cout << "Loaded " << meshes.size() << " meshes from " << filename << std::endl;
+    return true;
 }

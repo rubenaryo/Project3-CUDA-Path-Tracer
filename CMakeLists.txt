@@ -59,6 +59,7 @@ set(headers
 	src/light.h
     src/scene.h
     src/sceneStructs.h
+    src/tinygltf_include.h
     src/utilities.h
 )
 

@@ -56,7 +56,9 @@ enum GeomType
     GT_INVALID,
     GT_SPHERE,
     GT_CUBE,
-    GT_RECT
+    GT_RECT,
+    GT_TRIANGLE,
+    GT_MESH
 };
 
 enum LightType
@@ -81,6 +83,16 @@ struct Geom
     glm::mat4 transform;
     glm::mat4 inverseTransform;
     glm::mat4 invTranspose;
+};
+
+struct Mesh
+{
+    std::vector<glm::vec3>  vtx;
+    std::vector<glm::vec3>  nor;
+    std::vector<glm::vec2>  uv;
+    std::vector<glm::uvec3> idx;
+
+    MaterialID materialid;
 };
 
 struct Light

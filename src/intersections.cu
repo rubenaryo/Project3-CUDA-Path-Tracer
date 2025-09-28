@@ -131,6 +131,12 @@ __host__ __device__ float sphereIntersectionTest(
     return glm::length(r.origin - intersectionPoint);
 }
 
+__host__ __device__ float triangleIntersectionTest(Geom tri, Ray r, glm::vec3& intersectionPoint, glm::vec3& normal, bool& outside)
+{
+    //bool result = glm::intersectRayTriangle(r.origin, r.direction, )
+    return 0;
+}
+
 __device__ void sceneIntersect(PathSegment& path, const Geom* geoms, int geoms_size, ShadeableIntersection& result)
 {
     float t;
@@ -158,6 +164,10 @@ __device__ void sceneIntersect(PathSegment& path, const Geom* geoms, int geoms_s
         else if (geom.type == GT_SPHERE)
         {
             t = sphereIntersectionTest(geom, pathCopy.ray, tmp_intersect, tmp_normal, outside);
+        }
+        else if (geom.type == GT_TRIANGLE)
+        {
+            t = triangleIntersectionTest(geom, pathCopy.ray, tmp_intersect, tmp_normal, outside);
         }
         // TODO: add more intersection tests here... triangle? metaball? CSG?
 

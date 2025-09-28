@@ -90,6 +90,14 @@
             "TRANS":[-1.0,4.0,-1.0],
             "ROTAT":[0.0,0.0,0.0],
             "SCALE":[3.0,3.0,3.0]
+        },
+		{
+            "TYPE":"mesh",
+            "MATERIAL":"diffuse_white",
+            "TRANS":[0.0,0.0,0.0],
+            "ROTAT":[0.0,0.0,0.0],
+            "SCALE":[1.0,1.0,1.0],
+			"PATH":"C:/Users/Ruben/Code/CIS5650/Project3-CUDA-Path-Tracer/scenes/meshes/Fox/Fox.gltf"
         }
     ],
 	"Lights":
