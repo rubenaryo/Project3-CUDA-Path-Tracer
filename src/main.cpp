@@ -173,6 +173,8 @@ void initCuda()
 {
     cudaGLSetGLDevice(0);
 
+    scene->InitDeviceMeshes();
+
     // Clean up on program exit
     atexit(cleanupCuda);
 }

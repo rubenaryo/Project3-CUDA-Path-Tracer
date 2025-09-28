@@ -34,9 +34,35 @@ Scene::Scene(string filename)
 
 Scene::~Scene()
 {
-    for (Mesh& m : meshes)
+    int meshCount = meshes.size();
+    for (int m = 0; m != meshCount; ++m)
     {
-        m.cleanup();
+        meshes.at(m).cleanup();
+        deviceMeshes.at(m).deviceCleanup();
+    }
+
+}
+
+void Scene::InitDeviceMeshes()
+{
+    int meshCount = meshes.size();
+    for (int m = 0; m != meshCount; ++m)
+    {
+        const Mesh& hostMesh = meshes.at(m);
+        Mesh& deviceMesh = deviceMeshes.emplace_back();
+
+        uint32_t v = hostMesh.vtx_count;
+        uint32_t n = hostMesh.nor_count;
+        uint32_t u = hostMesh.uvs_count;
+        uint32_t t = hostMesh.tri_count;
+
+        deviceMesh.materialid = hostMesh.materialid;
+        deviceMesh.deviceAllocate(v, n, u, t);
+
+        if (v) cudaMemcpy(deviceMesh.vtx, hostMesh.vtx, v * sizeof(glm::vec3), cudaMemcpyHostToDevice);
+        if (n) cudaMemcpy(deviceMesh.nor, hostMesh.nor, n * sizeof(glm::vec3), cudaMemcpyHostToDevice);
+        if (u) cudaMemcpy(deviceMesh.uvs, hostMesh.uvs, u * sizeof(glm::vec2), cudaMemcpyHostToDevice);
+        if (t) cudaMemcpy(deviceMesh.idx, hostMesh.idx, t * sizeof(glm::uvec3), cudaMemcpyHostToDevice);
     }
 }
 
@@ -102,9 +128,13 @@ void Scene::loadFromJSON(const std::string& jsonName)
         }
         else if (type == "mesh")
         {
+            // Only support one mesh for now
+            if (!meshes.empty())
+                continue;
+
             newGeom.type = GT_MESH;
             const auto& relPath = p["PATH"];
-            int meshId = loadGLTF(relPath, meshes);
+            int meshId = loadGLTF(relPath, meshes, newGeom.materialid);
 
             if (meshId == -1)
                 continue; // Mesh loading failed. Don't add it.
@@ -214,7 +244,7 @@ std::vector<T> getBufferData(const tinygltf::Model& model, int accessorIndex)
 }
 
 // Returns mesh id
-__host__ int loadGLTF(const std::string& relPath, std::vector<Mesh>& meshes)
+__host__ int loadGLTF(const std::string& relPath, std::vector<Mesh>& meshes, MaterialID matId)
 {
     tinygltf::Model model;
     tinygltf::TinyGLTF loader;
@@ -303,10 +333,25 @@ __host__ int loadGLTF(const std::string& relPath, std::vector<Mesh>& meshes)
 
     mesh.allocate(v, n, u, t);
 
-    if (mesh.vtx) memcpy(mesh.vtx, allVertices.data(), v * sizeof(glm::vec3));
-    if (mesh.nor) memcpy(mesh.nor, allNormals.data(), n * sizeof(glm::vec3));
-    if (mesh.uvs) memcpy(mesh.uvs, allUVs.data(), u * sizeof(glm::vec2));
-    if (mesh.idx) memcpy(mesh.idx, allIndices.data(), t * sizeof(glm::uvec3));
+    if (v)
+    {
+        memcpy(mesh.vtx, allVertices.data(), v * sizeof(glm::vec3));
+    }
 
+    if (n)
+    {
+        memcpy(mesh.nor, allNormals.data(), n * sizeof(glm::vec3));
+    }
+    
+    if (u)
+    {
+        memcpy(mesh.uvs, allUVs.data(), u * sizeof(glm::vec2));
+    }
+
+    if (t)
+    {
+        memcpy(mesh.idx, allIndices.data(), t * sizeof(glm::uvec3));
+    }
+    
     return meshId;
 }

@@ -79,11 +79,11 @@ static glm::vec3* dev_image = NULL;
 static Geom* dev_geoms = NULL;
 static Material* dev_materials = NULL;
 static Light* dev_lights = NULL;
+static Mesh* dev_meshes = NULL;
 static PathSegment* dev_paths = NULL;
 static PathSegment* dev_opaquePaths = NULL;
 static ShadeableIntersection* dev_intersections = NULL;
 static MaterialSortKey* dev_sortKeys = NULL;  // Parallel array of flags to mark material type.
-static Mesh* dev_meshes = NULL;
 
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
@@ -118,7 +118,8 @@ void pathtraceInit(Scene* scene)
     cudaMalloc(&dev_lights, scene->lights.size() * sizeof(Light));
     cudaMemcpy(dev_lights, scene->lights.data(), scene->lights.size() * sizeof(Light), cudaMemcpyHostToDevice);
 
-    cudaMalloc(&dev_meshes, scene->meshes.size() * sizeof(Mesh));
+    cudaMalloc(&dev_meshes, scene->deviceMeshes.size() * sizeof(Mesh)); // Only support one mesh for now.
+    cudaMemcpy(dev_meshes, scene->deviceMeshes.data(), scene->deviceMeshes.size() * sizeof(Mesh), cudaMemcpyHostToDevice);
 
     cudaMalloc(&dev_intersections, pixelcount * sizeof(ShadeableIntersection));
     cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
@@ -137,6 +138,7 @@ void pathtraceFree()
     cudaFree(dev_geoms);
     cudaFree(dev_materials);
     cudaFree(dev_lights);
+    cudaFree(dev_meshes);
     cudaFree(dev_intersections);
     cudaFree(dev_sortKeys);
 

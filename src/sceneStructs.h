@@ -112,8 +112,8 @@ struct Mesh
         tri_count = t;
 
         if (v) vtx = (glm::vec3*) malloc(sizeof(glm::vec3)  * vtx_count);
-        if (n) nor = (glm::vec3*) malloc(sizeof(glm::vec3)  * vtx_count);
-        if (u) uvs = (glm::vec2*) malloc(sizeof(glm::vec2)  * vtx_count);
+        if (n) nor = (glm::vec3*) malloc(sizeof(glm::vec3)  * nor_count);
+        if (u) uvs = (glm::vec2*) malloc(sizeof(glm::vec2)  * uvs_count);
         if (t) idx = (glm::uvec3*)malloc(sizeof(glm::uvec3) * tri_count);
     }
 
@@ -135,9 +135,12 @@ struct Mesh
         tri_count = t;
 
         if (v) cudaMalloc(&vtx, sizeof(glm::vec3)  * vtx_count);
-        if (n) cudaMalloc(&nor, sizeof(glm::vec3)  * vtx_count);
-        if (u) cudaMalloc(&uvs, sizeof(glm::vec2)  * vtx_count);
+        if (n) cudaMalloc(&nor, sizeof(glm::vec3)  * nor_count);
+        if (u) cudaMalloc(&uvs, sizeof(glm::vec2)  * uvs_count);
         if (t) cudaMalloc(&idx, sizeof(glm::uvec3) * tri_count);
+
+        cudaError_t err = cudaGetLastError();
+        int stub = 42;
     }
 
     __host__ void deviceCleanup()
