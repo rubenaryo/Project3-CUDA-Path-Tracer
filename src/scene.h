@@ -9,6 +9,7 @@ private:
     void loadFromJSON(const std::string& jsonName);
 public:
     Scene(std::string filename);
+    ~Scene();
 
     std::vector<Geom> geoms;
     std::vector<Light> lights;
@@ -17,4 +18,4 @@ public:
     RenderState state;
 };
 
-bool loadGLTF(const std::string& filename, std::vector<Mesh>& meshes);
+__host__ int loadGLTF(const std::string& filename, std::vector<Mesh>& meshes);

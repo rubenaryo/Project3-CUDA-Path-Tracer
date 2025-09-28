@@ -32,6 +32,14 @@ Scene::Scene(string filename)
     }
 }
 
+Scene::~Scene()
+{
+    for (Mesh& m : meshes)
+    {
+        m.cleanup();
+    }
+}
+
 void Scene::loadFromJSON(const std::string& jsonName)
 {
     std::ifstream f(jsonName);
@@ -96,7 +104,12 @@ void Scene::loadFromJSON(const std::string& jsonName)
         {
             newGeom.type = GT_MESH;
             const auto& fileName = p["PATH"];
-            bool loadResult = loadGLTF(fileName, meshes);
+            int meshId = loadGLTF(fileName, meshes);
+
+            if (meshId == -1)
+                continue; // Mesh loading failed. Don't add it.
+
+            newGeom.meshId = meshId;
         }
 
         geoms.push_back(newGeom);
@@ -200,103 +213,96 @@ std::vector<T> getBufferData(const tinygltf::Model& model, int accessorIndex)
     return result;
 }
 
-bool loadGLTF(const std::string& filename, std::vector<Mesh>& meshes)
+// Returns mesh id
+__host__ int loadGLTF(const std::string& filename, std::vector<Mesh>& meshes)
 {
     tinygltf::Model model;
     tinygltf::TinyGLTF loader;
-    std::string err;
-    std::string warn;
+    std::string err, warn;
 
-    bool ret = loader.LoadASCIIFromFile(&model, &err, &warn, filename);
-    if (!ret) {
-        ret = loader.LoadBinaryFromFile(&model, &err, &warn, filename);
-    }
+    bool result = loader.LoadASCIIFromFile(&model, &err, &warn, filename);
+    if (!result) 
+        result = loader.LoadBinaryFromFile(&model, &err, &warn, filename);
 
-    if (!err.empty()) {
-        std::cerr << "glTF error: " << err << std::endl;
-    }
-    if (!warn.empty()) {
-        std::cerr << "glTF warning: " << warn << std::endl;
-    }
-    if (!ret) {
-        std::cerr << "Failed to load glTF file: " << filename << std::endl;
-        return false;
+    if (!result) {
+        std::cerr << "Failed to load glTF: " << filename << std::endl;
+        return -1;
     }
 
-    meshes.clear();
+    // Collect all mesh data
+    std::vector<glm::vec3> allVertices, allNormals;
+    std::vector<glm::vec2> allUVs;
+    std::vector<glm::uvec3> allIndices;
+    uint32_t vertexOffset = 0;
 
     for (const auto& mesh : model.meshes) {
         for (const auto& primitive : mesh.primitives) {
-            Mesh meshData;
-
+            // Load vertices
+            std::vector<glm::vec3> vertices;
             if (primitive.attributes.find("POSITION") != primitive.attributes.end()) {
-                int posAccessor = primitive.attributes.at("POSITION");
-                meshData.vtx = getBufferData<glm::vec3>(model, posAccessor);
+                vertices = getBufferData<glm::vec3>(model, primitive.attributes.at("POSITION"));
             }
+            if (vertices.empty()) continue;
 
-            if (primitive.attributes.find("NORMAL") != primitive.attributes.end()) {
-                int normalAccessor = primitive.attributes.at("NORMAL");
-                meshData.nor = getBufferData<glm::vec3>(model, normalAccessor);
-            }
+            // Load normals and UVs
+            auto normals = getBufferData<glm::vec3>(model,
+                primitive.attributes.count("NORMAL") ? primitive.attributes.at("NORMAL") : -1);
+            auto uvs = getBufferData<glm::vec2>(model,
+                primitive.attributes.count("TEXCOORD_0") ? primitive.attributes.at("TEXCOORD_0") : -1);
 
-            if (primitive.attributes.find("TEXCOORD_0") != primitive.attributes.end()) {
-                int uvAccessor = primitive.attributes.at("TEXCOORD_0");
-                meshData.uv = getBufferData<glm::vec2>(model, uvAccessor);
-            }
+            // Add to combined arrays
+            allVertices.insert(allVertices.end(), vertices.begin(), vertices.end());
 
+            if (normals.size()) 
+                allNormals.insert(allNormals.end(), normals.begin(), normals.end());
+
+            if (uvs.size()) 
+                allUVs.insert(allUVs.end(), uvs.begin(), uvs.end());
+
+            // Load and adjust indices
             if (primitive.indices >= 0) {
                 const auto& accessor = model.accessors[primitive.indices];
-
                 if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT) {
                     auto indices16 = getBufferData<uint16_t>(model, primitive.indices);
-                    meshData.idx.reserve(indices16.size() / 3);
                     for (size_t i = 0; i < indices16.size(); i += 3) {
-                        meshData.idx.push_back(glm::uvec3(indices16[i], indices16[i + 1], indices16[i + 2]));
+                        allIndices.push_back(glm::uvec3(
+                            indices16[i] + vertexOffset,
+                            indices16[i + 1] + vertexOffset,
+                            indices16[i + 2] + vertexOffset));
                     }
                 }
                 else if (accessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT) {
                     auto indices32 = getBufferData<uint32_t>(model, primitive.indices);
-                    meshData.idx.reserve(indices32.size() / 3);
                     for (size_t i = 0; i < indices32.size(); i += 3) {
-                        meshData.idx.push_back(glm::uvec3(indices32[i], indices32[i + 1], indices32[i + 2]));
+                        allIndices.push_back(glm::uvec3(
+                            indices32[i] + vertexOffset,
+                            indices32[i + 1] + vertexOffset,
+                            indices32[i + 2] + vertexOffset));
                     }
                 }
             }
 
-            if (meshData.vtx.empty()) {
-                std::cerr << "Warning: Mesh has no vertices" << std::endl;
-                continue;
-            }
-
-            if (meshData.nor.empty() && !meshData.idx.empty()) {
-                meshData.nor.resize(meshData.vtx.size(), glm::vec3(0.0f));
-
-                for (const auto& tri : meshData.idx) {
-                    glm::vec3 v0 = meshData.vtx[tri.x];
-                    glm::vec3 v1 = meshData.vtx[tri.y];
-                    glm::vec3 v2 = meshData.vtx[tri.z];
-
-                    glm::vec3 normal = glm::normalize(glm::cross(v1 - v0, v2 - v0));
-
-                    meshData.nor[tri.x] += normal;
-                    meshData.nor[tri.y] += normal;
-                    meshData.nor[tri.z] += normal;
-                }
-
-                for (auto& normal : meshData.nor) {
-                    normal = glm::normalize(normal);
-                }
-            }
-
-            // Ensure UVs exist
-            if (meshData.uv.size() != meshData.vtx.size()) {
-                meshData.uv.resize(meshData.vtx.size(), glm::vec2(0.0f));
-            }
-
-            meshes.push_back(std::move(meshData));
+            vertexOffset += vertices.size();
         }
     }
 
-    std::cout << "Loaded " << meshes.size() << " meshes from " << filename << std::endl;
-    return true;
+    if (allVertices.empty()) return -1;
+
+    int meshId = meshes.size();
+    Mesh& mesh = meshes.emplace_back();
+
+    // Allocate host memory and copy data
+    uint32_t v = allVertices.size();
+    uint32_t n = allNormals.size();
+    uint32_t u = allUVs.size();
+    uint32_t t = allIndices.size();
+
+    mesh.allocate(v, n, u, t);
+
+    if (mesh.vtx) memcpy(mesh.vtx, allVertices.data(), v * sizeof(glm::vec3));
+    if (mesh.nor) memcpy(mesh.nor, allNormals.data(), n * sizeof(glm::vec3));
+    if (mesh.uvs) memcpy(mesh.uvs, allUVs.data(), u * sizeof(glm::vec2));
+    if (mesh.idx) memcpy(mesh.idx, allIndices.data(), t * sizeof(glm::uvec3));
+
+    return meshId;
 }

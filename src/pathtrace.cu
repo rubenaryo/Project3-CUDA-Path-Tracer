@@ -83,6 +83,7 @@ static PathSegment* dev_paths = NULL;
 static PathSegment* dev_opaquePaths = NULL;
 static ShadeableIntersection* dev_intersections = NULL;
 static MaterialSortKey* dev_sortKeys = NULL;  // Parallel array of flags to mark material type.
+static Mesh* dev_meshes = NULL;
 
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
@@ -117,11 +118,14 @@ void pathtraceInit(Scene* scene)
     cudaMalloc(&dev_lights, scene->lights.size() * sizeof(Light));
     cudaMemcpy(dev_lights, scene->lights.data(), scene->lights.size() * sizeof(Light), cudaMemcpyHostToDevice);
 
+    cudaMalloc(&dev_meshes, scene->meshes.size() * sizeof(Mesh));
+
     cudaMalloc(&dev_intersections, pixelcount * sizeof(ShadeableIntersection));
     cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 
     cudaMalloc(&dev_sortKeys, pixelcount * sizeof(MaterialSortKey));
     thrust::fill(thrust::device, dev_sortKeys, dev_sortKeys + pixelcount, SORTKEY_INVALID);
+
 
     checkCUDAError("pathtraceInit");
 }

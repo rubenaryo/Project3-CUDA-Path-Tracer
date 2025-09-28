@@ -389,6 +389,8 @@ int main(int argc, char** argv)
     // GLFW main loop
     mainLoop();
 
+    delete scene;
+
     return 0;
 }
 
