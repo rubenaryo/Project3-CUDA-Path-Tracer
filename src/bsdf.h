@@ -30,6 +30,8 @@ struct ShadeKernelArgs
     int num_lights;
     Geom* geoms;
     int num_geoms;
+    Mesh* meshes;
+    int num_meshes;
 };
 
 typedef void(*ShadeKernel)(ShadeKernelArgs args);

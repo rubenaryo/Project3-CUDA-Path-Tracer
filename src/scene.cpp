@@ -56,7 +56,6 @@ void Scene::InitDeviceMeshes()
         uint32_t u = hostMesh.uvs_count;
         uint32_t t = hostMesh.tri_count;
 
-        deviceMesh.materialid = hostMesh.materialid;
         deviceMesh.deviceAllocate(v, n, u, t);
 
         if (v) cudaMemcpy(deviceMesh.vtx, hostMesh.vtx, v * sizeof(glm::vec3), cudaMemcpyHostToDevice);
@@ -103,7 +102,7 @@ void Scene::loadFromJSON(const std::string& jsonName)
     const auto& objectsData = data["Objects"];
     for (const auto& p : objectsData)
     {
-        Geom newGeom;
+        Geom newGeom = {};
         newGeom.materialid = MatNameToID[p["MATERIAL"]];
 
         const auto& trans = p["TRANS"];

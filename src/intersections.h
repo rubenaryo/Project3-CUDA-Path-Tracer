@@ -81,10 +81,21 @@ __host__ __device__ float triangleIntersectionTest(
     glm::vec3& normal,
     bool& outside);
 
+__host__ __device__ float meshIntersectionTest(
+    Geom meshGeom,
+    const Mesh mesh,
+    Ray r,
+    glm::vec3& intersectionPoint,
+    glm::vec3& normal,
+    glm::vec2& uv,
+    bool& outside);
+
 __device__ void sceneIntersect(
     PathSegment& path,
     const Geom* geoms,
     int geoms_size,
+    const Mesh* meshes,
+    int meshes_size,
     ShadeableIntersection& result
 );
 

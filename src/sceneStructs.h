@@ -98,8 +98,6 @@ struct Mesh
     uint32_t uvs_count = 0;
     uint32_t tri_count = 0;
 
-    MaterialID materialid;
-
     bool isDevice = false;
 
     __host__ void allocate(uint32_t v, uint32_t n, uint32_t u, uint32_t t)
@@ -211,7 +209,6 @@ struct PathSegment
     glm::vec3 color;
     int pixelIndex;
     int remainingBounces;
-    bool prev_was_specular = false;
 };
 
 // Use with a corresponding PathSegment to do:

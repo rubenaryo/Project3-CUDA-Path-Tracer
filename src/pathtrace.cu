@@ -196,6 +196,8 @@ __global__ void computeIntersections(
     PathSegment* pathSegments,
     Geom* geoms,
     int geoms_size,
+    Mesh* meshes, 
+    int meshes_size,
     ShadeableIntersection* intersections)
 {
     int path_index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -205,7 +207,7 @@ __global__ void computeIntersections(
     
     PathSegment& path = pathSegments[path_index];
     ShadeableIntersection& result = intersections[path_index];
-    sceneIntersect(path, geoms, geoms_size, result);
+    sceneIntersect(path, geoms, geoms_size, meshes, meshes_size, result);
 }
 
 // Add the current iteration's output to the overall image
@@ -296,6 +298,8 @@ __host__ void shadeByMaterialType(int num_paths, int iter)
     skArgs.num_lights = hst_scene->lights.size();
     skArgs.geoms = dev_geoms;
     skArgs.num_geoms = hst_scene->geoms.size();
+    skArgs.meshes = dev_meshes;
+    skArgs.num_meshes = hst_scene->deviceMeshes.size();
 
     void* cudaKernelArgs[] = { &skArgs };
 
@@ -420,6 +424,8 @@ void pathtrace(uchar4* pbo, int frame, int iter)
             dev_paths,
             dev_geoms,
             hst_scene->geoms.size(),
+            dev_meshes,
+            hst_scene->deviceMeshes.size(),
             dev_intersections
         );
         checkCUDAError("trace one bounce");

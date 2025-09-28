@@ -135,7 +135,7 @@ __global__ void skDiffuseDirect(ShadeKernelArgs args)
         PathSegment shadowPath;
         shadowPath.ray = SpawnRay(view_point, wiW);
         ShadeableIntersection shadowTestResult;
-        sceneIntersect(shadowPath, args.geoms, args.num_geoms, shadowTestResult);
+        sceneIntersect(shadowPath, args.geoms, args.num_geoms, args.meshes, args.num_meshes, shadowTestResult);
 
         if (shadowTestResult.t >= 0.0f && shadowTestResult.t < (distToLight - FLT_EPSILON))
             continue;
