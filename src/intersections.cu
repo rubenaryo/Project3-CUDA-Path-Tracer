@@ -137,6 +137,8 @@ __host__ __device__ float triangleIntersectionTest(Geom tri, Ray r, glm::vec3& i
     return 0;
 }
 
+
+// From CIS 561
 __host__ __device__ bool intersectRayTriangle_MollerTrumbore(const Ray& ray,
     const glm::vec3& v0, const glm::vec3& v1, const glm::vec3& v2,
     float& t, glm::vec3& isect, glm::vec3& nor, glm::vec2& uv)
@@ -205,7 +207,7 @@ __host__ __device__  float meshIntersectionTest(Geom meshGeom, const Mesh mesh, 
         glm::vec2 isectUV;
         //bool hit = glm::intersectRayTriangle<glm::vec3>(r.origin, r.direction, v0, v1, v2, baryPosition);
         bool hit = intersectRayTriangle_MollerTrumbore(testRay, v0, v1, v2, t, isectPos, isectNor, isectUV);
-        if (hit && t > FLT_EPSILON && t < tmin)
+        if (hit && t < tmin)
         {
             hitAnything = true;
             tmin = t;
@@ -235,7 +237,7 @@ __host__ __device__  float meshIntersectionTest(Geom meshGeom, const Mesh mesh, 
                  v * mesh.uvs[closestIdx + 2];
         }
 
-        return tmin;
+        return glm::length(r.origin - intersectionPoint);
     }
 
     return -1.0f;
@@ -276,7 +278,7 @@ __device__ void sceneIntersect(PathSegment& path, const Geom* geoms, int geoms_s
             glm::vec2 uv;
             t = meshIntersectionTest(geom, mesh, pathCopy.ray, tmp_intersect, tmp_normal, uv, outside);
 
-            //path.color *= glm::vec3(0.0f, 0.5f, 0.0f);
+            
         }
         // TODO: add more intersection tests here... triangle? metaball? CSG?
 
