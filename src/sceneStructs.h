@@ -98,6 +98,7 @@ struct Mesh
     uint32_t uvs_count = 0;
     uint32_t tri_count = 0;
 
+    uint32_t bvh_root_idx = -1;
     bool isDevice = false;
 
     __host__ void allocate(uint32_t v, uint32_t n, uint32_t u, uint32_t t)
@@ -136,9 +137,6 @@ struct Mesh
         if (n) cudaMalloc(&nor, sizeof(glm::vec3)  * nor_count);
         if (u) cudaMalloc(&uvs, sizeof(glm::vec2)  * uvs_count);
         if (t) cudaMalloc(&idx, sizeof(glm::uvec3) * tri_count);
-
-        cudaError_t err = cudaGetLastError();
-        int stub = 42;
     }
 
     __host__ void deviceCleanup()
@@ -148,6 +146,21 @@ struct Mesh
         if (uvs) cudaFree(uvs);
         if (idx) cudaFree(idx);
     }
+};
+
+struct AABB
+{
+    glm::vec3 min = glm::vec3(FLT_MAX);
+    glm::vec3 max = glm::vec3(-FLT_MAX);
+    glm::vec3 centre = glm::vec3(0.0f);
+};
+
+struct BVHNode
+{
+    AABB bounds;
+    uint32_t triIndex = -1;
+    uint32_t triCount = 0;
+    uint32_t childIndex = -1;
 };
 
 struct Light

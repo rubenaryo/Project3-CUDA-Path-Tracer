@@ -18,6 +18,7 @@ public:
     std::vector<Material> materials;
     std::vector<Mesh> meshes;
     std::vector<Mesh> deviceMeshes;
+    std::vector<BVHNode> bvhNodes;
     RenderState state;
 };
 

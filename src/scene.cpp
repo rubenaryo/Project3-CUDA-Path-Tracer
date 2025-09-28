@@ -6,6 +6,7 @@
 #include <glm/gtx/string_cast.hpp>
 #include "json.hpp"
 #include "tinygltf_include.h"
+#include "bvh.h"
 
 #include <fstream>
 #include <iostream>
@@ -137,6 +138,11 @@ void Scene::loadFromJSON(const std::string& jsonName)
 
             if (meshId == -1)
                 continue; // Mesh loading failed. Don't add it.
+
+            Mesh& mesh = meshes.at(meshId);
+            bool bvhSuccess = BuildBVH(mesh, bvhNodes);
+            if (!bvhSuccess)
+                printf("BuildBVH failure for %s!", std::string(relPath).c_str());
 
             newGeom.meshId = meshId;
         }
@@ -351,6 +357,6 @@ __host__ int loadGLTF(const std::string& relPath, std::vector<Mesh>& meshes, Mat
     {
         memcpy(mesh.idx, allIndices.data(), t * sizeof(glm::uvec3));
     }
-    
+
     return meshId;
 }
