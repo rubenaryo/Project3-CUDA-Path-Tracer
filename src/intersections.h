@@ -58,7 +58,7 @@ __host__ __device__ float boxIntersectionTest(
     bool& outside);
 
 // Isect between an arbitrary ray and an AABB (for BVH)
-__host__ __device__ bool intersectAABB(const Ray& ray, const AABB& aabb, float& tMin, float& tMax);
+__host__ __device__ float intersectAABB(const Ray& ray, const AABB& aabb);
 
 // CHECKITOUT
 /**
@@ -86,7 +86,7 @@ __host__ __device__ float triangleIntersectionTest(
 
 __host__ __device__ float meshIntersectionTest(
     Geom meshGeom,
-    const Mesh mesh,
+    const SceneData& sd,
     Ray r,
     glm::vec3& intersectionPoint,
     glm::vec3& normal,

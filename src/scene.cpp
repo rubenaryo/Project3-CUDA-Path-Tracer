@@ -51,6 +51,7 @@ void Scene::InitDeviceMeshes()
     {
         const Mesh& hostMesh = meshes.at(m);
         Mesh& deviceMesh = deviceMeshes.emplace_back();
+        deviceMesh.bvh_root_idx = hostMesh.bvh_root_idx;
 
         uint32_t v = hostMesh.vtx_count;
         uint32_t n = hostMesh.nor_count;

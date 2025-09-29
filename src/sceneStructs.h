@@ -98,7 +98,7 @@ struct Mesh
     uint32_t uvs_count = 0;
     uint32_t tri_count = 0;
 
-    uint32_t bvh_root_idx = -1;
+    uint32_t bvh_root_idx = 0;
     bool isDevice = false;
 
     __host__ void allocate(uint32_t v, uint32_t n, uint32_t u, uint32_t t)
