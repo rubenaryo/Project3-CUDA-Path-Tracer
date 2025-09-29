@@ -128,14 +128,14 @@ __global__ void skDiffuseDirect(ShadeKernelArgs args)
     for (int s = 0; s != NUM_SAMPLES; ++s)
     {
         float distToLight;
-        glm::vec3 liResult = Sample_Li(view_point, intersection.surfaceNormal, args.lights, args.num_lights, rng, wiW, pdf, distToLight);
+        glm::vec3 liResult = Sample_Li(view_point, intersection.surfaceNormal, args.sceneData.lights, args.sceneData.lights_size, rng, wiW, pdf, distToLight);
         if (pdf < FLT_EPSILON)
             continue;
 
         PathSegment shadowPath;
         shadowPath.ray = SpawnRay(view_point, wiW);
         ShadeableIntersection shadowTestResult;
-        sceneIntersect(shadowPath, args.geoms, args.num_geoms, args.meshes, args.num_meshes, shadowTestResult);
+        sceneIntersect(shadowPath, args.sceneData, shadowTestResult);
 
         if (shadowTestResult.t >= 0.0f && shadowTestResult.t < (distToLight - FLT_EPSILON))
             continue;
@@ -143,7 +143,6 @@ __global__ void skDiffuseDirect(ShadeKernelArgs args)
         float lambert = glm::abs(glm::dot(wiW, intersection.surfaceNormal));
         totalDirectLight += bsdf * liResult * lambert / (NUM_SAMPLES * pdf);
     }
-    
     
     args.pathSegments[idx].color *= totalDirectLight;
     args.pathSegments[idx].remainingBounces = 0;

@@ -57,6 +57,9 @@ __host__ __device__ float boxIntersectionTest(
     glm::vec3& normal,
     bool& outside);
 
+// Isect between an arbitrary ray and an AABB (for BVH)
+__host__ __device__ bool intersectAABB(const Ray& ray, const AABB& aabb, float& tMin, float& tMax);
+
 // CHECKITOUT
 /**
  * Test intersection between a ray and a transformed sphere. Untransformed,
@@ -92,10 +95,7 @@ __host__ __device__ float meshIntersectionTest(
 
 __device__ void sceneIntersect(
     PathSegment& path,
-    const Geom* geoms,
-    int geoms_size,
-    const Mesh* meshes,
-    int meshes_size,
+    const SceneData& sceneData,
     ShadeableIntersection& result
 );
 

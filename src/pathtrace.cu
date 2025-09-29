@@ -196,10 +196,7 @@ __global__ void computeIntersections(
     int depth,
     int num_paths,
     PathSegment* pathSegments,
-    Geom* geoms,
-    int geoms_size,
-    Mesh* meshes, 
-    int meshes_size,
+    const SceneData sceneData,
     ShadeableIntersection* intersections)
 {
     int path_index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -209,7 +206,7 @@ __global__ void computeIntersections(
     
     PathSegment& path = pathSegments[path_index];
     ShadeableIntersection& result = intersections[path_index];
-    sceneIntersect(path, geoms, geoms_size, meshes, meshes_size, result);
+    sceneIntersect(path, sceneData, result);
 }
 
 // Add the current iteration's output to the overall image
@@ -286,7 +283,7 @@ __host__ int sortByMaterialType(int num_paths)
 
 
 // Note: Assumes dev_sortKeys has been sorted already by sortByMaterialType
-__host__ void shadeByMaterialType(int num_paths, int iter)
+__host__ void shadeByMaterialType(int num_paths, int iter, const SceneData& sd)
 {
     using utilityCore::divUp;
 
@@ -296,12 +293,7 @@ __host__ void shadeByMaterialType(int num_paths, int iter)
     ShadeKernelArgs skArgs;
     skArgs.iter = iter;
     skArgs.materials = dev_materials;
-    skArgs.lights = dev_lights;
-    skArgs.num_lights = hst_scene->lights.size();
-    skArgs.geoms = dev_geoms;
-    skArgs.num_geoms = hst_scene->geoms.size();
-    skArgs.meshes = dev_meshes;
-    skArgs.num_meshes = hst_scene->deviceMeshes.size();
+    skArgs.sceneData = sd;
 
     void* cudaKernelArgs[] = { &skArgs };
 
@@ -372,36 +364,15 @@ void pathtrace(uchar4* pbo, int frame, int iter)
         (cam.resolution.x + blockSize2d.x - 1) / blockSize2d.x,
         (cam.resolution.y + blockSize2d.y - 1) / blockSize2d.y);
 
-    ///////////////////////////////////////////////////////////////////////////
-
-    // Recap:
-    // * Initialize array of path rays (using rays that come out of the camera)
-    //   * You can pass the Camera object to that kernel.
-    //   * Each path ray must carry at minimum a (ray, color) pair,
-    //   * where color starts as the multiplicative identity, white = (1, 1, 1).
-    //   * This has already been done for you.
-    // * For each depth:
-    //   * Compute an intersection in the scene for each path ray.
-    //     A very naive version of this has been implemented for you, but feel
-    //     free to add more primitives and/or a better algorithm.
-    //     Currently, intersection distance is recorded as a parametric distance,
-    //     t, or a "distance along the ray." t = -1.0 indicates no intersection.
-    //     * Color is attenuated (multiplied) by reflections off of any object
-    //   * TODO: Stream compact away all of the terminated paths.
-    //     You may use either your implementation or `thrust::remove_if` or its
-    //     cousins.
-    //     * Note that you can't really use a 2D kernel launch any more - switch
-    //       to 1D.
-    //   * Shade the rays that intersected something or didn't bottom out.
-    //     That is, color the ray by performing a color computation according
-    //     to the shader, then generate a new ray to continue the ray path.
-    //     We recommend just updating the ray's PathSegment in place.
-    //     Note that this step may come before or after stream compaction,
-    //     since some shaders you write may also cause a path to terminate.
-    // * Finally, add this iteration's results to the image. This has been done
-    //   for you.
-
-    // perform one iteration of path tracing
+    SceneData sd;
+    sd.geoms = dev_geoms;
+    sd.geoms_size = hst_scene->geoms.size();
+    sd.lights = dev_lights;
+    sd.lights_size = hst_scene->lights.size();
+    sd.meshes = dev_meshes;
+    sd.meshes_size = hst_scene->deviceMeshes.size();
+    sd.bvhNodes = dev_bvhNodes;
+    sd.bvhNodes_size = hst_scene->bvhNodes.size();
 
     generateRayFromCamera<<<blocksPerGrid2d, blockSize2d>>>(cam, iter, traceDepth, dev_paths);
     checkCUDAError("generate camera ray");
@@ -424,10 +395,7 @@ void pathtrace(uchar4* pbo, int frame, int iter)
             depth,
             num_paths,
             dev_paths,
-            dev_geoms,
-            hst_scene->geoms.size(),
-            dev_meshes,
-            hst_scene->deviceMeshes.size(),
+            sd,
             dev_intersections
         );
         checkCUDAError("trace one bounce");
@@ -451,7 +419,7 @@ void pathtrace(uchar4* pbo, int frame, int iter)
     #endif
 
     #if MATERIAL_SORT
-        shadeByMaterialType(num_paths, iter);
+        shadeByMaterialType(num_paths, iter, sd);
         checkCUDAError("shadeByMaterialType");
     #else
         shadeLegacy(num_paths, iter);

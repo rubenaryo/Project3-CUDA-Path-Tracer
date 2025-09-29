@@ -148,6 +148,11 @@ struct Mesh
     }
 };
 
+struct Triangle
+{
+    glm::vec3 v[3];
+};
+
 struct AABB
 {
     glm::vec3 min = glm::vec3(FLT_MAX);
@@ -232,4 +237,24 @@ struct ShadeableIntersection
   float t;
   glm::vec3 surfaceNormal;
   MaterialID materialId;
+};
+
+struct BVHIntersectResult
+{
+    glm::vec3 pos;
+    glm::vec3 normal;
+    glm::vec2 uv;
+    float t;
+};
+
+struct SceneData
+{
+    Geom* geoms;
+    int geoms_size;
+    Mesh* meshes;
+    int meshes_size;
+    Light* lights;
+    int lights_size;
+    BVHNode* bvhNodes;
+    int bvhNodes_size;
 };

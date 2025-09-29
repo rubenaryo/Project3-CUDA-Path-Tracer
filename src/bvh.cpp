@@ -21,11 +21,10 @@ __host__ void GrowAABB(const glm::vec3* vertices, int vtx_count, AABB& aabb)
     aabb.centre = (aabb.min + aabb.max) * 0.5f;
 }
 
-#define MAX_DEPTH 10
 #define MIN_TRIS_PER_LEAF 4
 __host__ void Split(uint32_t parentIdx, std::vector<BVHNode>& allNodes, Mesh& mesh, int depth)
 {
-    if (depth >= MAX_DEPTH)
+    if (depth >= BVH_MAX_DEPTH)
         return; // No-op if depth limit reached
 
     // Choose split axis

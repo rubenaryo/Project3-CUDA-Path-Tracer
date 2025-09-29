@@ -1,5 +1,7 @@
 #include "intersections.h"
 
+#include "bvh.h"
+
 /// Kernel to label each intersection with additional information to be used for ray sorting and discarding
 __global__ void generateSortKeys(int N, const ShadeableIntersection* isects, Material* mats, MaterialSortKey* sortKeys)
 {
@@ -75,6 +77,25 @@ __host__ __device__ float boxIntersectionTest(
     return -1;
 }
 
+__host__ __device__ bool intersectAABB(const Ray& ray, const AABB& aabb, float& tMin, float& tMax)
+{
+    glm::vec3 invDir = 1.0f / ray.direction;
+
+    // Intersect with each axis aligned slab
+    glm::vec3 t0 = (aabb.min - ray.origin) * invDir;
+    glm::vec3 t1 = (aabb.max - ray.origin) * invDir;
+
+    // Find the closest one
+    glm::vec3 tNear = glm::min(t0, t1);
+    glm::vec3 tFar = glm::max(t0, t1);
+
+    // Within that find the largest intersection t
+    tMin = fmaxf(fmaxf(tNear.x, tNear.y), tNear.z);
+    tMax = fminf(fminf(tFar.x, tFar.y), tFar.z);
+
+    return tMax >= tMin && tMax >= 0.0f;;
+}
+
 __host__ __device__ float sphereIntersectionTest(
     Geom sphere,
     Ray r,
@@ -141,7 +162,7 @@ __host__ __device__ float triangleIntersectionTest(Geom tri, Ray r, glm::vec3& i
 // From CIS 561
 __host__ __device__ bool intersectRayTriangle_MollerTrumbore(const Ray& ray,
     const glm::vec3& v0, const glm::vec3& v1, const glm::vec3& v2,
-    float& t, glm::vec3& isect, glm::vec3& nor, glm::vec2& uv)
+    BVHIntersectResult& isectResult)
 {
     glm::vec3 edge1 = v1 - v0;
     glm::vec3 edge2 = v2 - v0;
@@ -164,17 +185,67 @@ __host__ __device__ bool intersectRayTriangle_MollerTrumbore(const Ray& ray,
     if (v < 0.0f || u + v > 1.0f)
         return false;
 
-    t = f * glm::dot(edge2, q);
+    float t = f * glm::dot(edge2, q);
 
     if (t > FLT_EPSILON)
     {
-        isect = ray.origin + ray.direction * t;
-        uv = glm::vec2(u, v);
-        nor = glm::normalize(glm::cross(edge1, edge2));
+        isectResult.pos = ray.origin + ray.direction * t;
+        isectResult.uv = glm::vec2(u, v);
+        isectResult.normal = glm::normalize(glm::cross(edge1, edge2));
+        isectResult.t = t;
         return true;
     }
 
     return false;
+}
+
+__host__ __device__ bool intersectRayTriangle_MollerTrumbore(const Ray& ray,
+const Triangle& tri, BVHIntersectResult& isectResult)
+{
+    return intersectRayTriangle_MollerTrumbore(ray, tri.v[0], tri.v[1], tri.v[2], isectResult);
+}
+
+__host__ __device__  float bvhIntersectionTest(const Ray& r, uint32_t bvhRootIndex, const BVHNode* bvhNodes, const glm::vec3* vertices, BVHIntersectResult& isectResult)
+{
+    uint32_t nodeStack[BVH_MAX_DEPTH];
+    uint32_t stackIdx = 0;
+    nodeStack[stackIdx++] = bvhRootIndex;
+    
+    isectResult.t = FLT_MAX;
+    BVHIntersectResult tmpIsectResult;
+
+    // DFS - Keep going until there's no nodes left in the stack
+    while (stackIdx > 0)
+    {
+        uint32_t nodeIdx = nodeStack[--stackIdx];
+        const BVHNode node = bvhNodes[nodeIdx]; //gmem access
+        float tMinAABB, tMaxAABB;
+        if (!intersectAABB(r, node.bounds, tMinAABB, tMaxAABB))
+            continue;
+        
+        if (node.childIndex == -1) // Leaf: No more children to test
+        {
+            // Test all the tris
+            const uint32_t maxTriIdx = node.triIndex + node.triCount;
+            for (uint32_t triIdx = node.triIndex; triIdx < maxTriIdx; ++triIdx)
+            {
+                const Triangle tri = GetTriangleFromTriIdx(triIdx, vertices);
+                if (intersectRayTriangle_MollerTrumbore(r, tri, tmpIsectResult) && 
+                    tmpIsectResult.t < isectResult.t)
+                {
+                    // This is the closest hit tri that we've tested so far
+                    isectResult = tmpIsectResult;
+                }
+            }
+        }
+        else
+        {
+            nodeStack[stackIdx++] = node.childIndex + 1;
+            nodeStack[stackIdx++] = node.childIndex + 0;
+        }
+    }
+
+    return isectResult.t;
 }
 
 __host__ __device__  float meshIntersectionTest(Geom meshGeom, const Mesh mesh, Ray r, glm::vec3& intersectionPoint, glm::vec3& normal, glm::vec2& uv, bool& outside)
@@ -188,47 +259,41 @@ __host__ __device__  float meshIntersectionTest(Geom meshGeom, const Mesh mesh, 
 
     outside = true;
     bool hitAnything = false;
-    float tmin = FLT_MAX;
     int closestIdx = -1;
 
-    glm::vec3 closestPos;
-    glm::vec3 closestNor;
-    glm::vec2 closestUV;
+    BVHIntersectResult isectResult;
+    isectResult.t = FLT_MAX;
 
     for (uint32_t i = 0; (i+2) < mesh.vtx_count; i += 3)
     {
-        glm::vec3 v0 = mesh.vtx[i];
-        glm::vec3 v1 = mesh.vtx[i + 1];
-        glm::vec3 v2 = mesh.vtx[i + 2];
+        //const Triangle tri = GetTriangleFromTriIdx(i, mesh.vtx);
+        Triangle tri;
+        tri.v[0] = mesh.vtx[i];
+        tri.v[1] = mesh.vtx[i + 1];
+        tri.v[2] = mesh.vtx[i + 2];
 
-        float t;
-        glm::vec3 isectPos;
-        glm::vec3 isectNor;
-        glm::vec2 isectUV;
+        BVHIntersectResult tmpIsectResult;
         //bool hit = glm::intersectRayTriangle<glm::vec3>(r.origin, r.direction, v0, v1, v2, baryPosition);
-        bool hit = intersectRayTriangle_MollerTrumbore(testRay, v0, v1, v2, t, isectPos, isectNor, isectUV);
-        if (hit && t < tmin)
+        bool hit = intersectRayTriangle_MollerTrumbore(testRay, tri, tmpIsectResult);
+        if (hit && tmpIsectResult.t < isectResult.t)
         {
             hitAnything = true;
-            tmin = t;
             closestIdx = i;
-            closestPos = isectPos;
-            closestNor = isectNor;
-            closestUV  = isectUV;
+            isectResult = tmpIsectResult;
         }
     }
 
     if (hitAnything)
     {
-        intersectionPoint = glm::vec3(meshGeom.transform * glm::vec4(closestPos, 1.0f));
-        normal = glm::vec3(meshGeom.invTranspose * glm::vec4(closestNor, 0.0f));
+        intersectionPoint = glm::vec3(meshGeom.transform * glm::vec4(isectResult.pos, 1.0f));
+        normal = glm::vec3(meshGeom.invTranspose * glm::vec4(isectResult.normal, 0.0f));
         normal = glm::normalize(normal);
 
         uv = glm::vec2(0.f);
         if (0 < closestIdx && closestIdx < (mesh.uvs_count - 2))
         {
-            float u = closestUV.x;
-            float v = closestUV.y;
+            float u = isectResult.uv.x;
+            float v = isectResult.uv.y;
             float w = 1.0f - u - v;
 
             // Barycentric interp to get uv coords
@@ -243,7 +308,7 @@ __host__ __device__  float meshIntersectionTest(Geom meshGeom, const Mesh mesh, 
     return -1.0f;
 }
 
-__device__ void sceneIntersect(PathSegment& path, const Geom* geoms, int geoms_size, const Mesh* meshes, int meshes_size, ShadeableIntersection& result)
+__device__ void sceneIntersect(PathSegment& path, const SceneData& sceneData, ShadeableIntersection& result)
 {
     float t;
     glm::vec3 intersect_point;
@@ -257,8 +322,9 @@ __device__ void sceneIntersect(PathSegment& path, const Geom* geoms, int geoms_s
     glm::vec3 tmp_normal;
 
     const PathSegment pathCopy = path;
-
-    // naive parse through global geoms
+    
+    int geoms_size = sceneData.geoms_size;
+    const Geom* geoms = sceneData.geoms;
 
     for (int i = 0; i < geoms_size; i++)
     {
@@ -274,11 +340,9 @@ __device__ void sceneIntersect(PathSegment& path, const Geom* geoms, int geoms_s
         }
         else if (geom.type == GT_MESH)
         {
-            const Mesh mesh = meshes[geom.meshId];
+            const Mesh mesh = sceneData.meshes[geom.meshId];
             glm::vec2 uv;
             t = meshIntersectionTest(geom, mesh, pathCopy.ray, tmp_intersect, tmp_normal, uv, outside);
-
-            
         }
         // TODO: add more intersection tests here... triangle? metaball? CSG?
 
