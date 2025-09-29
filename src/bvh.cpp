@@ -22,18 +22,18 @@ __host__ void GrowAABB(const glm::vec3* vertices, int vtx_count, AABB& aabb)
 }
 
 #define MIN_TRIS_PER_LEAF 4
+static int maxDepthTest = -1;
+
 __host__ void Split(uint32_t parentIdx, std::vector<BVHNode>& allNodes, Mesh& mesh, int depth)
 {
+    maxDepthTest = std::max(maxDepthTest, depth);
     if (depth >= BVH_MAX_DEPTH)
-        return; // No-op if depth limit reached
+        return;
 
     // Choose split axis
     BVHNode parentCopy = allNodes[parentIdx];
     uint32_t parentTriIndex = parentCopy.triIndex;
     uint32_t parentTriCount = parentCopy.triCount;
-
-    if (parentTriCount <= MIN_TRIS_PER_LEAF)
-        return; // There aren't enough triangles, it's not worth subdividing
 
     glm::vec3 extent = allNodes[parentIdx].bounds.max - allNodes[parentIdx].bounds.min;
     uint32_t splitAxis = extent.x > glm::max(extent.y, extent.z) ? 0 : extent.y > extent.z ? 1 : 2;
@@ -42,10 +42,9 @@ __host__ void Split(uint32_t parentIdx, std::vector<BVHNode>& allNodes, Mesh& me
     // Create child nodes
     uint32_t childAIdx = allNodes.size();
     uint32_t childBIdx = childAIdx + 1;
-    allNodes[parentIdx].childIndex = childAIdx;
 
-    BVHNode& childA = allNodes.emplace_back();
-    BVHNode& childB = allNodes.emplace_back();
+    BVHNode childA;
+    BVHNode childB;
 
     childA.triIndex = parentTriIndex;
     childB.triIndex = parentTriIndex;
@@ -84,8 +83,14 @@ __host__ void Split(uint32_t parentIdx, std::vector<BVHNode>& allNodes, Mesh& me
         }
     }
 
-    Split(childAIdx, allNodes, mesh, depth + 1);
-    Split(childBIdx, allNodes, mesh, depth + 1);
+    if (childA.triCount > 0 && childB.triCount > 0)
+    {
+        allNodes[parentIdx].childIndex = childAIdx;
+        allNodes.push_back(childA);
+        allNodes.push_back(childB);
+        Split(childAIdx, allNodes, mesh, depth + 1);
+        Split(childBIdx, allNodes, mesh, depth + 1);
+    }
 }
 
 __host__ bool BuildBVH(Mesh& mesh, std::vector<BVHNode>& allNodes)

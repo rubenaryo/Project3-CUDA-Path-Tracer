@@ -2,7 +2,7 @@
 
 #include "sceneStructs.h"
 
-static const int BVH_MAX_DEPTH = 10;
+static const int BVH_MAX_DEPTH = 32;
 
 // Warning: When called from the device, v is typically global memory!
 __host__ __device__ inline Triangle GetTriangleFromTriIdx(uint32_t triIndex, const glm::vec3* v)
