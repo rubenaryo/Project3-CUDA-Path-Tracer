@@ -32,8 +32,8 @@ __host__ void Split(uint32_t parentIdx, std::vector<BVHNode>& allNodes, Mesh& me
 
     // Choose split axis
     BVHNode parentCopy = allNodes[parentIdx];
-    uint32_t parentTriIndex = parentCopy.triIndex;
-    uint32_t parentTriCount = parentCopy.triCount;
+    int32_t parentTriIndex = parentCopy.triIndex;
+    int32_t parentTriCount = parentCopy.triCount;
 
     glm::vec3 extent = allNodes[parentIdx].bounds.max - allNodes[parentIdx].bounds.min;
     uint32_t splitAxis = extent.x > glm::max(extent.y, extent.z) ? 0 : extent.y > extent.z ? 1 : 2;
@@ -50,7 +50,7 @@ __host__ void Split(uint32_t parentIdx, std::vector<BVHNode>& allNodes, Mesh& me
     childB.triIndex = parentTriIndex;
 
     // Assign parent's tris to each child
-    const uint32_t maxTriIdx = parentTriIndex + parentTriCount;
+    const uint32_t maxTriIdx = (uint32_t)parentTriIndex + parentTriCount;
     for (uint32_t triIdx = parentTriIndex; triIdx < maxTriIdx; ++triIdx)
     {
         const uint32_t vertIdx = triIdx * 3;
@@ -67,8 +67,8 @@ __host__ void Split(uint32_t parentIdx, std::vector<BVHNode>& allNodes, Mesh& me
 
         if (isSideA)
         {
-            uint32_t swapTriIdx = childA.triIndex + childA.triCount - 1;
-            uint32_t swapVertIdx = swapTriIdx * 3;
+            int32_t swapTriIdx = childA.triIndex + childA.triCount - 1;
+            int32_t swapVertIdx = swapTriIdx * 3;
 
             // Swap tris to ensure data cohesion per node
             mesh.vtx[vertIdx]   = mesh.vtx[swapVertIdx];

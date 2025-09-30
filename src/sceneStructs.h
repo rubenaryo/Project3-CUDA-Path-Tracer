@@ -18,6 +18,7 @@ typedef uint32_t LightID;
 typedef uint16_t MaterialID;
 typedef uint32_t MaterialSortKey;
 static const MaterialSortKey SORTKEY_INVALID = UINT32_MAX;
+static const MaterialID MATERIALID_INVALID = UINT16_MAX;
 
 enum MaterialType : uint16_t
 {
@@ -164,9 +165,9 @@ struct AABB
 struct BVHNode
 {
     AABB bounds;
-    uint32_t triIndex = -1;
+    int32_t triIndex = -1;
     uint32_t triCount = 0;
-    uint32_t childIndex = -1;
+    int32_t childIndex = -1;
 };
 
 struct Light

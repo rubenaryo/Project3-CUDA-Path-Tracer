@@ -336,7 +336,7 @@ __device__ void sceneIntersect(PathSegment& path, const SceneData& sceneData, Sh
     glm::vec3 normal;
     float t_min = FLT_MAX;
     int hit_geom_index = -1;
-    MaterialID hitMaterial = -1;
+    MaterialID hitMaterial = MATERIALID_INVALID;
     bool outside = true;
 
     glm::vec3 tmp_intersect;
