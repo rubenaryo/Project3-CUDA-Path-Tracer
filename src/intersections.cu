@@ -206,12 +206,37 @@ const Triangle& tri, BVHIntersectResult& isectResult)
     return intersectRayTriangle_MollerTrumbore(ray, tri.v[0], tri.v[1], tri.v[2], isectResult);
 }
 
-__host__ __device__  float bvhIntersectionTest(const Ray& r, uint32_t bvhRootIndex, const BVHNode* bvhNodes, const glm::vec3* vertices, BVHIntersectResult& isectResult)
+__host__ __device__ bool testAllTrianglesForMesh(const Ray& r, uint32_t meshVtxIdx, const glm::vec3* vertices, uint32_t vtx_count, BVHIntersectResult& isectResult)
+{
+    bool hit = false;
+    isectResult.t = FLT_MAX;
+    for (uint32_t i = 0; (i + 2) < vtx_count; i += 3)
+    {
+        Triangle tri;
+        tri.v[0] = vertices[i];
+        tri.v[1] = vertices[i + 1];
+        tri.v[2] = vertices[i + 2];
+
+        BVHIntersectResult tmpIsectResult;
+        bool triHit = intersectRayTriangle_MollerTrumbore(r, tri, tmpIsectResult);
+        if (triHit && tmpIsectResult.t < isectResult.t)
+        {
+            hit = true;
+            tmpIsectResult.triIdx = i;
+            isectResult = tmpIsectResult;
+        }
+    }
+
+    return hit;
+}
+
+__host__ __device__  bool bvhIntersectionTest(const Ray& r, uint32_t bvhRootIndex, const BVHNode* bvhNodes, const glm::vec3* vertices, BVHIntersectResult& isectResult)
 {
     uint32_t nodeStack[BVH_MAX_DEPTH];
     uint32_t stackIdx = 0;
     nodeStack[stackIdx++] = bvhRootIndex;
     
+    bool hitAnything = false;
     isectResult.t = FLT_MAX;
     BVHIntersectResult tmpIsectResult;
 
@@ -231,8 +256,10 @@ __host__ __device__  float bvhIntersectionTest(const Ray& r, uint32_t bvhRootInd
                 if (intersectRayTriangle_MollerTrumbore(r, tri, tmpIsectResult) && 
                     tmpIsectResult.t < isectResult.t)
                 {
+                    hitAnything = true;
                     // This is the closest hit tri that we've tested so far
                     isectResult = tmpIsectResult;
+                    isectResult.triIdx = triIdx;
                 }
             }
         }
@@ -260,31 +287,28 @@ __host__ __device__  float bvhIntersectionTest(const Ray& r, uint32_t bvhRootInd
         }
     }
 
-    return isectResult.t;
+    return hitAnything;
 }
 
 __host__ __device__  float meshIntersectionTest(Geom meshGeom, const SceneData& sd, Ray r, glm::vec3& intersectionPoint, glm::vec3& normal, glm::vec2& uv, bool& outside)
 {
-    glm::vec3 ro = multiplyMV(meshGeom.inverseTransform, glm::vec4(r.origin, 1.0f));
-    glm::vec3 rd = glm::normalize(multiplyMV(meshGeom.inverseTransform, glm::vec4(r.direction, 0.0f)));
-
-    Ray testRay;
-    testRay.origin = ro;
-    testRay.direction = rd;
+    Ray localRay;
+    localRay.origin = multiplyMV(meshGeom.inverseTransform, glm::vec4(r.origin, 1.0f));
+    localRay.direction = glm::normalize(multiplyMV(meshGeom.inverseTransform, glm::vec4(r.direction, 0.0f)));
 
     outside = true;
-    bool hitAnything = false;
-    int closestIdx = -1;
-
     const Mesh mesh = sd.meshes[meshGeom.meshId];
     const BVHNode* bvhNodes = sd.bvhNodes;
 
     BVHIntersectResult isectResult;
-    isectResult.t = FLT_MAX;
-    bvhIntersectionTest(r, mesh.bvh_root_idx, bvhNodes, mesh.vtx, isectResult);
 
-    hitAnything = isectResult.t < (FLT_MAX - FLT_EPSILON);
-    if (hitAnything)
+#if USE_BVH
+    bool hit = bvhIntersectionTest(localRay, mesh.bvh_root_idx, bvhNodes, mesh.vtx, isectResult);
+#else
+    bool hit = testAllTrianglesForMesh(localRay, 0, mesh.vtx, mesh.vtx_count, isectResult);
+#endif
+
+    if (hit)
     {
         intersectionPoint = glm::vec3(meshGeom.transform * glm::vec4(isectResult.pos, 1.0f));
         normal = glm::vec3(meshGeom.invTranspose * glm::vec4(isectResult.normal, 0.0f));
@@ -295,9 +319,9 @@ __host__ __device__  float meshIntersectionTest(Geom meshGeom, const SceneData& 
         float w = 1.0f - u - v;
         
         // Barycentric interp to get uv coords
-        uv = w * mesh.uvs[closestIdx] +
-             u * mesh.uvs[closestIdx + 1] +
-             v * mesh.uvs[closestIdx + 2];
+        uv = w * mesh.uvs[isectResult.triIdx] +
+             u * mesh.uvs[isectResult.triIdx + 1] +
+             v * mesh.uvs[isectResult.triIdx + 2];
 
         return glm::length(r.origin - intersectionPoint);
     }

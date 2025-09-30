@@ -12,6 +12,7 @@
 #define STREAM_COMPACTION 1
 #define MATERIAL_SORT 1
 #define STOCHASTIC_AA 1
+#define USE_BVH 1
 
 typedef uint32_t LightID;
 typedef uint16_t MaterialID;
@@ -245,6 +246,7 @@ struct BVHIntersectResult
     glm::vec3 normal;
     glm::vec2 uv;
     float t;
+    uint32_t triIdx;
 };
 
 struct SceneData
