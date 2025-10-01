@@ -181,20 +181,23 @@ __global__ void skDiffuseDirect(ShadeKernelArgs args)
         int randomLightIndex = iu0N(rng);
         const Light chosenLight = lights[randomLightIndex];
 
-        glm::vec3 liResult = Sample_Li(view_point, intersection.surfaceNormal, chosenLight, numLights, rng, wiW, pdf, distToLight);
+        glm::vec3 liResult = Sample_Li(view_point, intersection.surfaceNormal, chosenLight, numLights, rng, wiW, psdf, distToLight);
         if (pdf < FLT_EPSILON)
             continue;
 
-        PathSegment shadowPath;
-        shadowPath.ray = SpawnRay(view_point, wiW);
-        ShadeableIntersection shadowTestResult;
-        sceneIntersect(shadowPath, args.sceneData, shadowTestResult);
+        //PathSegment shadowPath;
+        //shadowPath.ray = SpawnRay(view_point, wiW);
+        //ShadeableIntersection shadowTestResult;
+        //sceneIntersect(shadowPath, args.sceneData, shadowTestResult);
+        //
+        //if (shadowTestResult.t >= 0.0f && shadowTestResult.t < (distToLight - FLT_EPSILON))
+        //    continue;
 
-        if (shadowTestResult.t >= 0.0f && shadowTestResult.t < (distToLight - FLT_EPSILON))
+        float cosTheta = (glm::dot(wiW, intersection.surfaceNormal));
+        if (cosTheta < FLT_EPSILON)
             continue;
 
-        float lambert = glm::abs(glm::dot(wiW, intersection.surfaceNormal));
-        totalDirectLight += bsdf * liResult * lambert / (NUM_SAMPLES * pdf);
+        totalDirectLight += bsdf * liResult * cosTheta / (NUM_SAMPLES * pdf);
     }
     
     args.pathSegments[idx].throughput *= totalDirectLight;
@@ -332,7 +335,7 @@ __global__ void skRefractive(ShadeKernelArgs args)
 // By convention: MUST match the order of the MaterialType struct
 static ShadeKernel sKernels[] =
 {
-    skDiffuse,
+    skDiffuseDirect,
     skSpecular,
     skEmissive,
     skRefractive
