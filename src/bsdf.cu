@@ -143,21 +143,6 @@ __device__ glm::vec3 SolveMIS(PathSegment path, ShadeableIntersection isect, con
 
 /////////
 
-// By convention: MUST match the order of the MaterialType struct
-static ShadeKernel sKernels[] =
-{
-    skDiffuse,
-    skSpecular,
-    skEmissive,
-    skRefractive
-};
-
-__host__ ShadeKernel getShadingKernelForMaterial(MaterialType mt)
-{
-    assert(mt < MT_COUNT);
-    return sKernels[mt];
-}
-
 #if STREAM_COMPACTION
 #define HANDLE_MISS(idx, intersection, pathSegments) \
         assert((intersection).t > FLT_EPSILON);
@@ -304,4 +289,19 @@ __global__ void skEmissive(ShadeKernelArgs args)
 __global__ void skRefractive(ShadeKernelArgs args)
 {
     return; // TODO
+}
+
+// By convention: MUST match the order of the MaterialType struct
+static ShadeKernel sKernels[] =
+{
+    skDiffuse,
+    skSpecular,
+    skEmissive,
+    skRefractive
+};
+
+__host__ ShadeKernel getShadingKernelForMaterial(MaterialType mt)
+{
+    assert(mt < MT_COUNT);
+    return sKernels[mt];
 }

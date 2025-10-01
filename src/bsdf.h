@@ -35,10 +35,3 @@ struct ShadeKernelArgs
 typedef void(*ShadeKernel)(ShadeKernelArgs args);
 
 __host__ ShadeKernel getShadingKernelForMaterial(MaterialType mt);
-
-__global__ void skDiffuse(ShadeKernelArgs args);
-__global__ void skDiffuseDirect(ShadeKernelArgs args);
-__global__ void skDiffuseFull(ShadeKernelArgs args);
-__global__ void skSpecular(ShadeKernelArgs args);
-__global__ void skEmissive(ShadeKernelArgs args);
-__global__ void skRefractive(ShadeKernelArgs args);
