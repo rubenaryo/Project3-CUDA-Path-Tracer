@@ -82,63 +82,38 @@ inline __device__ glm::vec3 Sample_f_diffuse(const glm::vec3& albedo, const glm:
     return f_diffuse(albedo);
 }
 
-__device__ glm::vec3 SolveMIS(PathSegment path, ShadeableIntersection isect, const SceneData& sd, glm::vec3 view_point, glm::vec3 woW, const Material mat, thrust::default_random_engine& rng)
+__device__ bool SolveDirectLighting(const SceneData& sd, ShadeableIntersection isect, glm::vec3 view_point, thrust::default_random_engine& rng, glm::vec3& out_radiance, glm::vec3& out_wiW, float& out_pdf)
 {
-    // Direct Sampling
     int numLights = sd.lights_size;
     thrust::uniform_int_distribution<int> iu0N(0, numLights - 1);
     int randomLightIndex = iu0N(rng);
     const Light chosenLight = sd.lights[randomLightIndex];
     glm::vec3 norW = isect.surfaceNormal;
 
-    glm::vec3 wiW_Li;
-    float distToLight_Li;
     float pdf_Li;
-    glm::vec3 bsdf_Li = Sample_Li(view_point, norW, chosenLight, numLights, rng, wiW_Li, pdf_Li, distToLight_Li);
+    float distToLight;
+    glm::vec3 wiW_Li;
 
-    float Li_absDot = glm::abs(glm::dot(wiW_Li, norW));
-    glm::vec3 Li_result = bsdf_Li * Li_absDot;
-
+    glm::vec3 liResult = Sample_Li(view_point, norW, chosenLight, numLights, rng, wiW_Li, pdf_Li, distToLight);
     if (pdf_Li < FLT_EPSILON)
-        Li_result = glm::vec3(0.f);
-    else
-        Li_result /= pdf_Li;
+        return false;
 
-    // BSDF Sampling
-    glm::vec3 wiW_bsdf;
-    float pdf_bsdf;
-    glm::vec3 bsdf = Sample_f_diffuse(mat.color, norW, rng, wiW_bsdf, pdf_bsdf); // TODO: This should handle non-diffuse as well.
+    // Test occlusion
+    {
+        PathSegment shadowPath;
+        shadowPath.ray = SpawnRay(view_point, wiW_Li);
+        ShadeableIntersection shadowTestResult;
+        sceneIntersect(shadowPath, sd, shadowTestResult);
 
-    PathSegment bsdfRay = path;
-    bsdfRay.ray = SpawnRay(view_point, wiW_bsdf);
+        if (shadowTestResult.t >= 0.0f && shadowTestResult.t < (distToLight - FLT_EPSILON))
+            return false;
+    }
 
-    float bsdf_absDot = glm::abs(glm::dot(wiW_bsdf, norW));
+    out_radiance = liResult;
+    out_wiW = wiW_Li;
+    out_pdf = pdf_Li;
 
-    ShadeableIntersection bsdfIsect;
-    sceneIntersect(bsdfRay, sd, bsdfIsect);
-
-    glm::vec3 bsdf_result = bsdfRay.throughput * bsdf * bsdf_absDot / pdf_bsdf;
-
-    // Cross-method PDF
-    float pdf_Li_bsdf = Pdf(GetMaterialTypeFromSortKey(isect.matSortKey), isect.surfaceNormal, woW, wiW_Li); // Li ray with respect to bsdf TODO: This only works for diffuse
-    float pdf_bsdf_Li = Pdf_Li(chosenLight, view_point, norW, wiW_bsdf); // bsdf ray with respect to light
-
-    float w = 0.5, wg = 0.5;
-    if (pdf_bsdf > FLT_EPSILON && pdf_Li_bsdf > FLT_EPSILON)
-        w = PowerHeuristic(1, pdf_bsdf, 1, pdf_bsdf_Li);
-
-    if (pdf_Li > FLT_EPSILON && pdf_bsdf_Li > FLT_EPSILON)
-        wg = PowerHeuristic(1, pdf_Li, 1, pdf_Li_bsdf);
-    
-
-    // Assemble final LTE weighted sum
-    return (bsdf_result * w) + (Li_result * wg);
-
-    // TODO_MIS: Using resulting wiW, sample the scene and IF the same light was hit as Sample_Li, blend the two together.
-
-
-    // TODO_MIS
-    return glm::vec3(0.0f);
+    return true;
 }
 
 /////////
@@ -228,8 +203,6 @@ __global__ void skDiffuseDirect(ShadeKernelArgs args)
 
 __global__ void skDiffuseFull(ShadeKernelArgs args)
 {
-    // TODO_MIS
-    
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= args.num_paths)
         return;
@@ -242,11 +215,48 @@ __global__ void skDiffuseFull(ShadeKernelArgs args)
 
     thrust::default_random_engine rng = makeSeededRandomEngine(args.iter, idx, path.remainingBounces);
     glm::vec3 view_point = path.ray.origin + intersection.t * path.ray.direction;
-    glm::vec3 misResult = SolveMIS(path, intersection, args.sceneData, view_point, path.ray.direction, material, rng);
+    glm::vec3 thisBounceRadiance(0.0f); // Comes from direct lighting only
+    
+    glm::vec3 wiW_bsdf;
+    float pdf_bsdf;
+    glm::vec3 bsdf;
+    
+    // BSDF Sampling
+    {
+        bsdf = Sample_f_diffuse(material.color, intersection.surfaceNormal, rng, wiW_bsdf, pdf_bsdf);
 
-    args.pathSegments[idx].throughput *= misResult;
-    //args.pathSegments[idx].ray = SpawnRay(path.ray.origin + intersection.t * path.ray.direction, wiW);
+        if (pdf_bsdf < FLT_EPSILON)
+        {
+            // Something went wrong, terminate
+            args.pathSegments[idx].remainingBounces = 0;
+            return;
+        }
+    }
+
+    glm::vec3 directRadiance;
+    glm::vec3 wiW_Li;
+    float pdf_Li;
+    // Direct Light Sampling
+    if (SolveDirectLighting(args.sceneData, intersection, view_point, rng, directRadiance, wiW_Li, pdf_Li))
+    {
+        float bsdf_pdf = Pdf(material.type, intersection.surfaceNormal, -path.ray.direction, wiW_Li);
+        float lambert_Li = glm::abs(glm::dot(intersection.surfaceNormal, wiW_Li));
+        glm::vec3 matBsdf = f_diffuse(material.color); // TODO: Support diff materials?
+
+        // Assemble direct lighting components
+        glm::vec3 directLightResult = args.pathSegments[idx].throughput * directRadiance * lambert_Li / pdf_Li;
+        thisBounceRadiance += directLightResult * PowerHeuristic(1, pdf_Li, 1, bsdf_pdf);
+    }
+
+    float lambert = glm::abs(glm::dot(intersection.surfaceNormal, wiW_bsdf));
+    args.pathSegments[idx].throughput *= (bsdf/pdf_bsdf) * lambert;
+    args.pathSegments[idx].prevBounceSample.pdf = pdf_bsdf;
+    args.pathSegments[idx].prevBounceSample.matType = MT_DIFFUSE;
+    args.pathSegments[idx].ray = SpawnRay(view_point, wiW_bsdf);
     args.pathSegments[idx].remainingBounces = 0;
+
+    // Key difference with MIS: Accumulate direct lighting radiance here.
+    args.pathSegments[idx].Lo += thisBounceRadiance;
 }
 
 __global__ void skSpecular(ShadeKernelArgs args)
@@ -279,7 +289,35 @@ __global__ void skEmissive(ShadeKernelArgs args)
 
     HANDLE_MISS(idx, intersection, pathSegments);
 
+    glm::vec3 throughput = args.pathSegments[idx].throughput;
+    args.pathSegments[idx].Lo += (material.color * material.emittance) * throughput;
+    args.pathSegments[idx].remainingBounces = 0; // Mark it for culling later
+}
+
+__global__ void skEmissiveMIS(ShadeKernelArgs args)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= args.num_paths)
+        return;
+
+    const PathSegment path = args.pathSegments[idx];
+    const ShadeableIntersection intersection = args.shadeableIntersections[idx];
+    const Material material = args.materials[GetMaterialIDFromSortKey(intersection.matSortKey)];
+
+    HANDLE_MISS(idx, intersection, pathSegments);
+
     // TODO_MIS: Do the power heuristic here for MIS.
+    glm::vec3 totalRadiance(0.0f);
+    if (args.depth == 0) // If this is the first bounce, there is no "previous" data to go off
+    {
+        totalRadiance = material.color * material.emittance;
+    }
+    else
+    {
+        // TODO: Check that path.previous is not specular
+
+        //float lightPdf 
+    }
 
     glm::vec3 throughput = args.pathSegments[idx].throughput;
     args.pathSegments[idx].Lo += (material.color * material.emittance) * throughput;
@@ -294,9 +332,9 @@ __global__ void skRefractive(ShadeKernelArgs args)
 // By convention: MUST match the order of the MaterialType struct
 static ShadeKernel sKernels[] =
 {
-    skDiffuse,
+    skDiffuseFull,
     skSpecular,
-    skEmissive,
+    skEmissiveMIS,
     skRefractive
 };
 

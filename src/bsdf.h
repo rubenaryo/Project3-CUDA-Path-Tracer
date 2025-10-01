@@ -26,6 +26,7 @@ struct ShadeKernelArgs
 {
     int iter;
     int num_paths;
+    int depth;
     ShadeableIntersection* shadeableIntersections;
     PathSegment* pathSegments;
     Material* materials;
@@ -35,3 +36,5 @@ struct ShadeKernelArgs
 typedef void(*ShadeKernel)(ShadeKernelArgs args);
 
 __host__ ShadeKernel getShadingKernelForMaterial(MaterialType mt);
+
+__global__ void skDiffuse(ShadeKernelArgs args); // Keep this around for legacy shading

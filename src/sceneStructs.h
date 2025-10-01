@@ -224,6 +224,12 @@ struct Material
 
 };
 
+struct BSDFSample
+{
+    float pdf = 0.0f;
+    MaterialType matType = MT_INVALID;
+};
+
 struct Camera
 {
     glm::ivec2 resolution;
@@ -250,6 +256,7 @@ struct PathSegment
     Ray ray;
     glm::vec3 throughput;
     glm::vec3 Lo; // accumulated radiance
+    BSDFSample prevBounceSample; // data from the previous bounce (for MIS)
     int pixelIndex;
     int remainingBounces;
 };

@@ -116,12 +116,12 @@ __device__ glm::vec3 DirectSampleAreaLight(glm::vec3 view_point, glm::vec3 view_
             float r2 = glm::dot(lightToSurface, lightToSurface);
             out_distToLight = glm::sqrt(r2);
             
-            //if (r2 < FLT_EPSILON)
-            //{
-            //	out_pdf = 0.0f;
-            //	out_wiW = glm::normalize(-lightToSurface);
-            //	return glm::vec3(0.0f);
-            //}
+            if (r2 < FLT_EPSILON)
+            {
+            	out_pdf = 0.0f;
+            	out_wiW = glm::normalize(-lightToSurface);
+            	return glm::vec3(0.0f);
+            }
 
             lightToSurface *= glm::inversesqrt(r2); // normalize
             out_wiW = -lightToSurface;
@@ -142,6 +142,5 @@ __device__ glm::vec3 DirectSampleAreaLight(glm::vec3 view_point, glm::vec3 view_
 
 __device__ glm::vec3 Sample_Li(glm::vec3 view_point, glm::vec3 nor, const Light& chosenLight, int numLights, thrust::default_random_engine& rng, glm::vec3& out_wiW, float& out_pdf, float& out_distToLight)
 {
-
     return DirectSampleAreaLight(view_point, nor, chosenLight, numLights, rng, out_wiW, out_pdf, out_distToLight);
 }

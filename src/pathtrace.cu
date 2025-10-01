@@ -287,7 +287,7 @@ __host__ int sortByMaterialType(int num_paths)
 
 
 // Note: Assumes dev_sortKeys has been sorted already by sortByMaterialType
-__host__ void shadeByMaterialType(int num_paths, int iter, const SceneData& sd)
+__host__ void shadeByMaterialType(int num_paths, int iter, int depth, const SceneData& sd)
 {
     using utilityCore::divUp;
 
@@ -296,6 +296,7 @@ __host__ void shadeByMaterialType(int num_paths, int iter, const SceneData& sd)
     // These args stay the same across all rays.
     ShadeKernelArgs skArgs;
     skArgs.iter = iter;
+    skArgs.depth = depth;
     skArgs.materials = dev_materials;
     skArgs.sceneData = sd;
 
@@ -328,7 +329,7 @@ __host__ void shadeByMaterialType(int num_paths, int iter, const SceneData& sd)
     }
 }
 
-__host__ void shadeLegacy(int num_paths, int iter)
+__host__ void shadeLegacy(int num_paths, int iter, int depth)
 {
     // TODO: compare between directly shading the path segments and shading
     // path segments that have been reshuffled to be contiguous in memory.
@@ -336,9 +337,11 @@ __host__ void shadeLegacy(int num_paths, int iter)
     ShadeKernelArgs skArgs = {
           iter
         , num_paths
+        , depth
         , dev_intersections
         , dev_paths
         , dev_materials
+        // TODO: Need to pass SceneData here
     };
 
     dim3 numblocksPathSegmentTracing = (num_paths + BLOCK_SIZE_1D - 1) / BLOCK_SIZE_1D;
@@ -423,10 +426,10 @@ void pathtrace(uchar4* pbo, int frame, int iter)
     #endif
 
     #if MATERIAL_SORT
-        shadeByMaterialType(num_paths, iter, sd);
+        shadeByMaterialType(num_paths, iter, depth, sd);
         checkCUDAError("shadeByMaterialType");
     #else
-        shadeLegacy(num_paths, iter);
+        shadeLegacy(num_paths, iter, depth);
     #endif
 
     #if STREAM_COMPACTION
