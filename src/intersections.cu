@@ -68,7 +68,7 @@ __host__ __device__ float rectIntersectionTest(Geom rect, const glm::vec3& posW,
     return rectIntersectionTest(posW, norW, radiusU, radiusV, rayWorld, invTfm, out_toLightLocal, out_uv);
 }
 
-__host__ __device__ __device__ float intersectRectangle(const Geom& geom, const Ray& ray, glm::vec3& out_isectPoint, glm::vec3& out_normal)
+__host__ __device__ float intersectRectangle(const Geom& geom, const Ray& ray, glm::vec3& out_isectPoint, glm::vec3& out_normal)
 {
     glm::vec3 ro = glm::vec3(geom.inverseTransform * glm::vec4(ray.origin, 1.0f));
     glm::vec3 rd = glm::vec3(geom.inverseTransform * glm::vec4(ray.direction, 0.0f));
