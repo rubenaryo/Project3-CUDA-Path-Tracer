@@ -40,7 +40,7 @@ __host__ __device__ inline glm::vec3 multiplyMV(glm::mat4 m, glm::vec4 v)
     return glm::vec3(m * v);
 }
 
-__host__ __device__ float rectIntersectionTest(const glm::vec3& pos, const glm::vec3& nor, float radiusU, float radiusV, Ray rayWorld, const glm::mat4& invTfm, glm::vec3& out_localPos, glm::vec2& out_uv);
+__host__ __device__ float rectIntersectionTest(const glm::vec3& posW, const glm::vec3& norW, float radiusU, float radiusV, Ray rayWorld, const glm::mat4& invTfm, glm::vec3& out_localPos, glm::vec2& out_uv);
 
 // CHECKITOUT
 /**

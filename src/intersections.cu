@@ -22,7 +22,7 @@ __global__ void generateSortKeys(int N, const ShadeableIntersection* isects, Mat
 }
 
 // From CIS 561
-__host__ __device__ float rectIntersectionTest(const glm::vec3& pos, const glm::vec3& nor,
+__host__ __device__ float rectIntersectionTest(const glm::vec3& posW, const glm::vec3& norW,
     float radiusU, float radiusV,
     Ray rayWorld, const glm::mat4& invTfm,
     glm::vec3& out_toLightLocal, glm::vec2& out_uv
@@ -34,17 +34,17 @@ __host__ __device__ float rectIntersectionTest(const glm::vec3& pos, const glm::
     rayLocal.origin = multiplyMV(invTfm, glm::vec4(rayWorld.origin, 1.0f));
     rayLocal.direction = multiplyMV(invTfm, glm::vec4(rayWorld.direction, 0.0f));
 
-    float dt = glm::dot(-nor, rayLocal.direction);
+    float dt = glm::dot(-norW, rayLocal.direction);
     if (dt < 0.0f) return FLT_MAX;
     
-    float t = glm::dot(-nor, pos - rayLocal.origin) / dt;
+    float t = glm::dot(-norW, posW - rayLocal.origin) / dt;
     if (t < 0.0f) return FLT_MAX;
 
     vec3 hit = rayLocal.origin + rayLocal.direction * t;
-    vec3 vi = hit - pos;
+    vec3 vi = hit - posW;
 
-    vec3 U = normalize(cross(abs(nor.y) < 0.9 ? vec3(0, 1, 0) : vec3(1, 0, 0), nor));
-    vec3 V = cross(nor, U);
+    vec3 U = normalize(cross(abs(norW.y) < 0.9 ? vec3(0, 1, 0) : vec3(1, 0, 0), norW));
+    vec3 V = cross(norW, U);
 
     out_toLightLocal = hit - rayLocal.origin;
     out_uv = vec2(dot(U, vi) / length(U), dot(V, vi) / length(V));
@@ -397,7 +397,10 @@ __device__ void sceneIntersect(PathSegment& path, const SceneData& sceneData, Sh
             glm::vec2 uv;
             t = meshIntersectionTest(geom, sceneData, pathCopy.ray, tmp_intersect, tmp_normal, uv, outside);
         }
-        // TODO: add more intersection tests here... triangle? metaball? CSG?
+        else if (geom.type == GT_RECT)
+        {
+            // t = rectIntersectionTest()
+        }
 
         // Compute the minimum t from the intersection tests to determine what
         // scene geometry object was hit first.
