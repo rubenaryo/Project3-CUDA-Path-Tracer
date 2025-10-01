@@ -414,7 +414,7 @@ __device__ void sceneIntersect(PathSegment& path, const SceneData& sceneData, Sh
     if (hit_geom_index == -1)
     {
         result.t = -1.0f;
-        path.color = glm::vec3(0.0f); // This gmem read might be really bad.
+        path.throughput = glm::vec3(0.0f); // This gmem read might be really bad.
     }
     else
     {

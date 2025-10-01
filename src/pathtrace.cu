@@ -167,7 +167,8 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
     PathSegment& segment = pathSegments[index];
 
     segment.ray.origin = cam.position;
-    segment.color = glm::vec3(1.0f, 1.0f, 1.0f);
+    segment.throughput = glm::vec3(1.0f, 1.0f, 1.0f);
+    segment.Lo = glm::vec3(0.0f);
 
 #if STOCHASTIC_AA
     thrust::default_random_engine rng = makeSeededRandomEngine(iter, index, traceDepth);
@@ -217,7 +218,10 @@ __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iteration
     if (index < nPaths)
     {
         PathSegment iterationPath = iterationPaths[index];
-        image[iterationPath.pixelIndex] += iterationPath.color;
+
+        const glm::vec3 RADIANCE_UPPER_BOUND(1000000000000.0f);
+        assert(glm::lessThan(iterationPath.Lo, RADIANCE_UPPER_BOUND));
+        image[iterationPath.pixelIndex] += glm::clamp(iterationPath.Lo, glm::vec3(0.0f), RADIANCE_UPPER_BOUND);
     }
 }
 

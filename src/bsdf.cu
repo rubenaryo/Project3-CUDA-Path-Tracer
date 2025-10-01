@@ -117,7 +117,7 @@ __device__ glm::vec3 SolveMIS(PathSegment path, ShadeableIntersection isect, con
     ShadeableIntersection bsdfIsect;
     sceneIntersect(bsdfRay, sd, bsdfIsect);
 
-    glm::vec3 bsdf_result = bsdfRay.color * bsdf * bsdf_absDot / pdf_bsdf;
+    glm::vec3 bsdf_result = bsdfRay.throughput * bsdf * bsdf_absDot / pdf_bsdf;
 
     // Cross-method PDF
     float pdf_Li_bsdf = Pdf(GetMaterialTypeFromSortKey(isect.matSortKey), isect.surfaceNormal, woW, wiW_Li); // Li ray with respect to bsdf TODO: This only works for diffuse
@@ -146,7 +146,7 @@ __device__ glm::vec3 SolveMIS(PathSegment path, ShadeableIntersection isect, con
 // By convention: MUST match the order of the MaterialType struct
 static ShadeKernel sKernels[] =
 {
-    skDiffuseFull,
+    skDiffuse,
     skSpecular,
     skEmissive,
     skRefractive
@@ -188,7 +188,7 @@ __global__ void skDiffuse(ShadeKernelArgs args)
     glm::vec3 bsdf = f_diffuse(material.color);
     glm::vec3 lightTransportResult = bsdf * PI; // Normally (bsdf*lambert)/pdf but this is simplified
 
-    args.pathSegments[idx].color *= lightTransportResult;
+    args.pathSegments[idx].throughput *= lightTransportResult;
     args.pathSegments[idx].ray = SpawnRay(path.ray.origin + intersection.t * path.ray.direction, wi);
     args.pathSegments[idx].remainingBounces--;
 }
@@ -237,7 +237,7 @@ __global__ void skDiffuseDirect(ShadeKernelArgs args)
         totalDirectLight += bsdf * liResult * lambert / (NUM_SAMPLES * pdf);
     }
     
-    args.pathSegments[idx].color *= totalDirectLight;
+    args.pathSegments[idx].throughput *= totalDirectLight;
     args.pathSegments[idx].remainingBounces = 0;
 }
 
@@ -259,7 +259,7 @@ __global__ void skDiffuseFull(ShadeKernelArgs args)
     glm::vec3 view_point = path.ray.origin + intersection.t * path.ray.direction;
     glm::vec3 misResult = SolveMIS(path, intersection, args.sceneData, view_point, path.ray.direction, material, rng);
 
-    args.pathSegments[idx].color *= misResult;
+    args.pathSegments[idx].throughput *= misResult;
     //args.pathSegments[idx].ray = SpawnRay(path.ray.origin + intersection.t * path.ray.direction, wiW);
     args.pathSegments[idx].remainingBounces = 0;
 }
@@ -277,7 +277,7 @@ __global__ void skSpecular(ShadeKernelArgs args)
     HANDLE_MISS(idx, intersection, pathSegments);
 
     glm::vec3 wiW = glm::reflect(path.ray.direction, intersection.surfaceNormal);
-    args.pathSegments[idx].color *= material.color;
+    args.pathSegments[idx].throughput *= material.color;
     args.pathSegments[idx].ray = SpawnRay(path.ray.origin + intersection.t*path.ray.direction, wiW);
     args.pathSegments[idx].remainingBounces--;
 }
@@ -294,7 +294,10 @@ __global__ void skEmissive(ShadeKernelArgs args)
 
     HANDLE_MISS(idx, intersection, pathSegments);
 
-    args.pathSegments[idx].color *= (material.color * material.emittance);
+    // TODO_MIS: Do the power heuristic here for MIS.
+
+    glm::vec3 throughput = args.pathSegments[idx].throughput;
+    args.pathSegments[idx].Lo += (material.color * material.emittance) * throughput;
     args.pathSegments[idx].remainingBounces = 0; // Mark it for culling later
 }
 
