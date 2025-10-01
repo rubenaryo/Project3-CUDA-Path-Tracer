@@ -176,7 +176,7 @@ void Scene::loadFromJSON(const std::string& jsonName)
 
         if (p["TYPE"] == "AREA")
         {
-            newLight.type = LT_AREA;
+            newLight.lightType = LT_AREA;
         }
 
         const auto& trans = p["TRANS"];
@@ -188,6 +188,8 @@ void Scene::loadFromJSON(const std::string& jsonName)
         newLight.scale = glm::vec3(scale[0], scale[1], scale[2]);
         newLight.transform = utilityCore::buildTransformationMatrix(
             newLight.translation, newLight.rotation, newLight.scale);
+        newLight.inverseTransform = glm::inverse(newLight.transform);
+        newLight.invTranspose = glm::inverseTranspose(newLight.transform);
 
         // CUBE not supported
         const auto& geom = p["GEOMTYPE"];

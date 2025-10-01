@@ -1,69 +1,89 @@
 #include "light.h"
 
-#include "bsdf.h"
+//#include "bsdf.h"
 #include "intersections.h"
 #include <cmath>
 
-__device__ glm::vec3 SolveMIS(ShadeableIntersection isect, const SceneData& sd, glm::vec3 view_point, glm::vec3 woW, const Material mat, thrust::default_random_engine& rng)
+__device__ float PowerHeuristic(int nf, float fPdf, int ng, float gPdf) {
+    float f = nf * fPdf;
+    float g = ng * gPdf;
+    return (f * f) / (f * f + g * g);
+}
+
+__device__ bool areaLightIntersect(const Light& chosenLight, Ray r, ShadeableIntersection& out_isect)
 {
-    // Direct Sampling
-    glm::vec3 norW = isect.surfaceNormal;
-    glm::vec3 wiW_Li;
-    float distToLight_Li;
-    float pdf_Li;
-    glm::vec3 bsdf_Li = Sample_Li(view_point, norW, sd.lights, sd.lights_size, rng, wiW_Li, pdf_Li, distToLight_Li);
+    out_isect.t = FLT_MAX;
+    switch (chosenLight.geomType)
+    {
+    case GT_RECT:
+    {
+        glm::vec3 pos(0.0f);
+        glm::vec3 nor(0.0f, 0.0f, 1.0f);
+        glm::vec2 halfSideLengths = glm::vec2(0.5f); // TODO: Maybe get this from the light's scale?
+        glm::vec3 localPos;
+        glm::vec2 uv;
+        float d = rectIntersectionTest(pos, nor,
+            halfSideLengths.x, halfSideLengths.y,
+            r, chosenLight.inverseTransform, localPos, uv);
 
-    float Li_absDot = glm::abs(glm::dot(wiW_Li, norW));
-    glm::vec3 Li_result = bsdf_Li * Li_absDot;
+        out_isect.t = d; // TODO: This feels wrong, isn't d in local space?
+        
+        out_isect.surfaceNormal = glm::vec3(glm::normalize(chosenLight.invTranspose * glm::vec4(0.0f, 0.0f, 1.0f, 0.0f)));
+        // out_isect.Le = light.Le;
+        // out_isect.obj_ID = light.ID;
+    }
+        break;
+    default:
+        // Unsupported
+        break;
+    }
 
-    if (pdf_Li < FLT_EPSILON)
-        Li_result = glm::vec3(0.f);
-    else
-        Li_result /= pdf_Li;
+    return out_isect.t < (FLT_MAX - FLT_EPSILON);
+}
 
-    // BSDF Sampling
-    glm::vec3 wiW_bsdf;
-    float pdf_bsdf;
-    int type_bsdf;
-    glm::vec3 bsdf = Sample_f_diffuse(mat.color, norW, rng, wiW_bsdf, pdf_bsdf); // TODO: This should handle non-diffuse as well.
-    
-    PathSegment bsdfRay;
-    bsdfRay.ray = SpawnRay(view_point, wiW_bsdf);
-    float bsdf_absDot = glm::abs(glm::dot(wiW_bsdf, norW));
+__device__ float Pdf_Rect(const Light& chosenLight, const glm::vec3& view_point, const glm::vec3& light_point, const glm::vec3& norW)
+{
+    using namespace glm;
 
-    ShadeableIntersection bsdfIsect;
-    sceneIntersect(bsdfRay, sd, bsdfIsect);
+    float scaleX = chosenLight.scale.x;
+    float scaleZ = chosenLight.scale.z;
 
-    glm::vec3 bsdf_result = bsdfRay.color * bsdf * bsdf_absDot / pdf_bsdf;
+    float surfaceArea = (scaleX) * (scaleZ);
+    float areaPDF = 1.0 / surfaceArea;
 
-    // Cross-method PDF
-    //float pdf_Li_bsdf = squareToHemisphereCosinePDF(wiW_Li); // Li ray with respect to bsdf TODO: This only works for diffuse
-    //float pdf_bsdf_Li = Pdf_Li(view_point, nor, wiW_bsdf, lightIdx); // bsdf ray with respect to light
-    //
-    //float w = 0.5, wg = 0.5;
-    //if (pdf_bsdf > 0.001 && pdf_bsdf_Li > 0.001)
-    //    w = PowerHeuristic(1, pdf_bsdf, 1, pdf_bsdf_Li);
-    //
-    //if (pdf_Li > 0.001 && pdf_bsdf_Li > 0.001)
-    //    wg = PowerHeuristic(1, pdf_Li, 1, pdf_Li_bsdf);
-    //
-    //// Assemble final LTE weighted sum
-    ////return Li_result;
-    //return (bsdf_result * w) + (Li_result * wg);
+    vec3 lightToSurface = view_point - light_point;
+    vec3 normalizedLightToSurface = normalize(lightToSurface);
+    //vec3 norWorld = (chosenLight.transform * vec4(nor, 0.0)).xyz;
+    float cosTheta = abs(dot(normalize(norW), normalizedLightToSurface));
+    float r = length(lightToSurface);
 
-    // TODO_MIS: Using resulting wiW, sample the scene and IF the same light was hit as Sample_Li, blend the two together.
+    //if (cosTheta < 0.01)
+    //    return 0.0;
 
-    //ShadeableIntersection isect_bsdf;
-    //sceneIntersect(bsdfRay, geoms, numGeoms, isect_bsdf);
-    //glm::vec3 bsdf_result = isect_bsdf.Le * bsdf * bsdf_absDot;
-    //
-    //if (pdf_bsdf < 0.001)
-    //	bsdf_result = glm::vec3(0.0);
-    //else
-    //	bsdf_result /= pdf_bsdf;
+    return (r * r / cosTheta) * areaPDF;
+}
 
-    // TODO_MIS
-    return glm::vec3(0.0f);
+__device__ float Pdf_Li(const Light& chosenLight, const glm::vec3& view_point, const glm::vec3& norW, const glm::vec3& wiW)
+{
+    //Ray ray = SpawnRay(view_point, wiW);
+    Ray ray;
+    ray.direction = wiW;
+    ray.origin = view_point + wiW * 0.001f;
+
+    ShadeableIntersection isect;
+    if (!areaLightIntersect(chosenLight, ray, isect))
+        return 0.0f; // Didn't hit anything.
+
+    glm::vec3 light_point = ray.origin + isect.t * wiW;
+
+    switch (chosenLight.geomType)
+    {
+    case GT_RECT:
+        return Pdf_Rect(chosenLight, view_point, light_point, norW);
+        break;
+    }
+
+    return 0.0f;
 }
 
 __device__ glm::vec3 DirectSampleAreaLight(glm::vec3 view_point, glm::vec3 view_nor, const Light& chosenLight, int numLights, thrust::default_random_engine& rng, glm::vec3& out_wiW, float& out_pdf, float& out_distToLight)
@@ -105,7 +125,7 @@ __device__ glm::vec3 DirectSampleAreaLight(glm::vec3 view_point, glm::vec3 view_
 
             out_pdf = (r2 / cosTheta) * areaPDF;
 
-            return cosTheta * chosenLight.emittance * chosenLight.color;
+            return cosTheta * numLights * chosenLight.emittance * chosenLight.color;
         }
         break;
     default:
@@ -116,11 +136,8 @@ __device__ glm::vec3 DirectSampleAreaLight(glm::vec3 view_point, glm::vec3 view_
     return Le * numLights * chosenLight.color;
 }
 
-__device__ glm::vec3 Sample_Li(glm::vec3 view_point, glm::vec3 nor, Light* lights, int numLights, thrust::default_random_engine& rng, glm::vec3& out_wiW, float& out_pdf, float& out_distToLight)
+__device__ glm::vec3 Sample_Li(glm::vec3 view_point, glm::vec3 nor, const Light& chosenLight, int numLights, thrust::default_random_engine& rng, glm::vec3& out_wiW, float& out_pdf, float& out_distToLight)
 {
-    thrust::uniform_int_distribution<int> iu0N(0, numLights-1);
-    int randomLightIndex = iu0N(rng);
-    const Light chosenLight = lights[randomLightIndex];
 
     return DirectSampleAreaLight(view_point, nor, chosenLight, numLights, rng, out_wiW, out_pdf, out_distToLight);
 }

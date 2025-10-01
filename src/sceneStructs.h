@@ -53,6 +53,7 @@ static inline MaterialSortKey BuildSortKey(MaterialType type, MaterialID id)
     return (MaterialSortKey)type << 16 | (MaterialSortKey)id;
 }
 
+__host__ __device__
 static inline MaterialType GetMaterialTypeFromSortKey(MaterialSortKey key)
 {
     return static_cast<MaterialType>(key >> 16);
@@ -192,6 +193,8 @@ struct BVHNode
 struct Light
 {
     glm::mat4 transform;
+    glm::mat4 inverseTransform;
+    glm::mat4 invTranspose;
     glm::vec3 translation;
     glm::vec3 rotation;
     glm::vec3 scale;
@@ -200,7 +203,7 @@ struct Light
     
     float emittance;
     LightID id;
-    LightType type;
+    LightType lightType;
     GeomType geomType;
 };
 

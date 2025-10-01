@@ -16,7 +16,7 @@ __device__ void coordinateSystem(const glm::vec3& v1, glm::vec3& v2, glm::vec3& 
 __device__ glm::mat3 LocalToWorld(glm::vec3 nor);
 
 // PDF functions
-//__device__ float Pdf(const ShadeableIntersection& isect, glm::vec3 woW, glm::vec3 wiW);
+__device__ float Pdf(MaterialType matType, glm::vec3 norW, glm::vec3 woW, glm::vec3 wiW);
 
 // Sample_f / f functions
 __device__ glm::vec3 Sample_f_diffuse(const glm::vec3& albedo, const glm::vec3& norW, thrust::default_random_engine& rng, glm::vec3& out_wiW, float& out_pdf);
