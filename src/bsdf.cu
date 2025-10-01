@@ -332,9 +332,9 @@ __global__ void skRefractive(ShadeKernelArgs args)
 // By convention: MUST match the order of the MaterialType struct
 static ShadeKernel sKernels[] =
 {
-    skDiffuseFull,
+    skDiffuse,
     skSpecular,
-    skEmissiveMIS,
+    skEmissive,
     skRefractive
 };
 
