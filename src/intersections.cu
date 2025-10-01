@@ -25,7 +25,7 @@ __global__ void generateSortKeys(int N, const ShadeableIntersection* isects, Mat
 __host__ __device__ float rectIntersectionTest(const glm::vec3& pos, const glm::vec3& nor,
     float radiusU, float radiusV,
     Ray rayWorld, const glm::mat4& invTfm,
-    glm::vec3& out_localPos, glm::vec2& out_uv
+    glm::vec3& out_toLightLocal, glm::vec2& out_uv
 )
 {
     using namespace glm;
@@ -46,11 +46,11 @@ __host__ __device__ float rectIntersectionTest(const glm::vec3& pos, const glm::
     vec3 U = normalize(cross(abs(nor.y) < 0.9 ? vec3(0, 1, 0) : vec3(1, 0, 0), nor));
     vec3 V = cross(nor, U);
 
-    out_localPos = hit;
+    out_toLightLocal = hit - rayLocal.origin;
     out_uv = vec2(dot(U, vi) / length(U), dot(V, vi) / length(V));
     out_uv = out_uv + vec2(0.5, 0.5);
     
-    return (abs(dot(U, vi)) > radiusU || abs(dot(V, vi)) > radiusV) ? INFINITY : t;
+    return (abs(dot(U, vi)) > radiusU || abs(dot(V, vi)) > radiusV) ? FLT_MAX : t;
 }
 
 __host__ __device__ float boxIntersectionTest(

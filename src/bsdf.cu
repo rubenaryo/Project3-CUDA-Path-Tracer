@@ -82,7 +82,7 @@ inline __device__ glm::vec3 Sample_f_diffuse(const glm::vec3& albedo, const glm:
     return f_diffuse(albedo);
 }
 
-__device__ glm::vec3 SolveMIS(ShadeableIntersection isect, const SceneData& sd, glm::vec3 view_point, glm::vec3 woW, const Material mat, thrust::default_random_engine& rng)
+__device__ glm::vec3 SolveMIS(PathSegment path, ShadeableIntersection isect, const SceneData& sd, glm::vec3 view_point, glm::vec3 woW, const Material mat, thrust::default_random_engine& rng)
 {
     // Direct Sampling
     int numLights = sd.lights_size;
@@ -107,13 +107,10 @@ __device__ glm::vec3 SolveMIS(ShadeableIntersection isect, const SceneData& sd, 
     // BSDF Sampling
     glm::vec3 wiW_bsdf;
     float pdf_bsdf;
-    int type_bsdf;
     glm::vec3 bsdf = Sample_f_diffuse(mat.color, norW, rng, wiW_bsdf, pdf_bsdf); // TODO: This should handle non-diffuse as well.
 
-    PathSegment bsdfRay;
-    //bsdfRay.ray = SpawnRay(view_point, wiW_bsdf);
-    bsdfRay.ray.direction = wiW_bsdf;
-    bsdfRay.ray.origin = view_point + 0.001f * wiW_bsdf;
+    PathSegment bsdfRay = path;
+    bsdfRay.ray = SpawnRay(view_point, wiW_bsdf);
 
     float bsdf_absDot = glm::abs(glm::dot(wiW_bsdf, norW));
 
@@ -127,26 +124,18 @@ __device__ glm::vec3 SolveMIS(ShadeableIntersection isect, const SceneData& sd, 
     float pdf_bsdf_Li = Pdf_Li(chosenLight, view_point, norW, wiW_bsdf); // bsdf ray with respect to light
 
     float w = 0.5, wg = 0.5;
-    if (pdf_bsdf > 0.001 && pdf_bsdf_Li > 0.001)
+    if (pdf_bsdf > FLT_EPSILON && pdf_Li_bsdf > FLT_EPSILON)
         w = PowerHeuristic(1, pdf_bsdf, 1, pdf_bsdf_Li);
 
-    if (pdf_Li > 0.001 && pdf_bsdf_Li > 0.001)
+    if (pdf_Li > FLT_EPSILON && pdf_bsdf_Li > FLT_EPSILON)
         wg = PowerHeuristic(1, pdf_Li, 1, pdf_Li_bsdf);
+    
 
     // Assemble final LTE weighted sum
-    //return Li_result;
     return (bsdf_result * w) + (Li_result * wg);
 
     // TODO_MIS: Using resulting wiW, sample the scene and IF the same light was hit as Sample_Li, blend the two together.
 
-    //ShadeableIntersection isect_bsdf;
-    //sceneIntersect(bsdfRay, geoms, numGeoms, isect_bsdf);
-    //glm::vec3 bsdf_result = isect_bsdf.Le * bsdf * bsdf_absDot;
-    //
-    //if (pdf_bsdf < 0.001)
-    //	bsdf_result = glm::vec3(0.0);
-    //else
-    //	bsdf_result /= pdf_bsdf;
 
     // TODO_MIS
     return glm::vec3(0.0f);
@@ -268,7 +257,7 @@ __global__ void skDiffuseFull(ShadeKernelArgs args)
 
     thrust::default_random_engine rng = makeSeededRandomEngine(args.iter, idx, path.remainingBounces);
     glm::vec3 view_point = path.ray.origin + intersection.t * path.ray.direction;
-    glm::vec3 misResult = SolveMIS(intersection, args.sceneData, view_point, path.ray.direction, material, rng);
+    glm::vec3 misResult = SolveMIS(path, intersection, args.sceneData, view_point, path.ray.direction, material, rng);
 
     args.pathSegments[idx].color *= misResult;
     //args.pathSegments[idx].ray = SpawnRay(path.ray.origin + intersection.t * path.ray.direction, wiW);

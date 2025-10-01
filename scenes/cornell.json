@@ -86,7 +86,7 @@
         },
         {
             "TYPE":"sphere",
-            "MATERIAL":"specular_white",
+            "MATERIAL":"diffuse_white",
             "TRANS":[-1.0,4.0,-1.0],
             "ROTAT":[0.0,0.0,0.0],
             "SCALE":[3.0,3.0,3.0]
@@ -94,7 +94,7 @@
 		{
             "TYPE":"mesh",
             "MATERIAL":"diffuse_white",
-            "TRANS":[2.5,-1.0,1.0],
+            "TRANS":[2.0,0.01,1.0],
             "ROTAT":[0.0,-45.0,0.0],
             "SCALE":[0.06, 0.06, 0.06],
 			"PATH":"../scenes/meshes/Fox/Fox.gltf"

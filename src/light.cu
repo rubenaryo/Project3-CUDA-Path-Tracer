@@ -19,15 +19,19 @@ __device__ bool areaLightIntersect(const Light& chosenLight, Ray r, ShadeableInt
     {
         glm::vec3 pos(0.0f);
         glm::vec3 nor(0.0f, 0.0f, 1.0f);
-        glm::vec2 halfSideLengths = glm::vec2(0.5f); // TODO: Maybe get this from the light's scale?
-        glm::vec3 localPos;
+        glm::vec2 halfSideLengths = glm::vec2(chosenLight.scale.x, chosenLight.scale.z); // TODO: Maybe get this from the light's scale?
+        glm::vec3 toLightLocal;
         glm::vec2 uv;
         float d = rectIntersectionTest(pos, nor,
             halfSideLengths.x, halfSideLengths.y,
-            r, chosenLight.inverseTransform, localPos, uv);
+            r, chosenLight.inverseTransform, toLightLocal, uv);
 
-        out_isect.t = d; // TODO: This feels wrong, isn't d in local space?
-        
+        if (d > (FLT_MAX - FLT_EPSILON))
+            return false;
+
+        glm::vec3 toLightWorld = multiplyMV(chosenLight.inverseTransform, glm::vec4(toLightLocal, 1.0f));
+
+        out_isect.t = glm::length(toLightWorld); // TODO: This feels wrong, isn't d in local space?
         out_isect.surfaceNormal = glm::vec3(glm::normalize(chosenLight.invTranspose * glm::vec4(0.0f, 0.0f, 1.0f, 0.0f)));
         // out_isect.Le = light.Le;
         // out_isect.obj_ID = light.ID;
