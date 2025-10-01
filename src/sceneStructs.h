@@ -48,10 +48,29 @@ struct NotMaterialTypePred
 };
 
 __host__ __device__
-static MaterialSortKey BuildSortKey(MaterialType type, MaterialID id)
+static inline MaterialSortKey BuildSortKey(MaterialType type, MaterialID id)
 {
     return (MaterialSortKey)type << 16 | (MaterialSortKey)id;
 }
+
+static inline MaterialType GetMaterialTypeFromSortKey(MaterialSortKey key)
+{
+    return static_cast<MaterialType>(key >> 16);
+}
+
+__host__ __device__
+static inline MaterialID GetMaterialIDFromSortKey(MaterialSortKey key)
+{
+    return static_cast<MaterialID>(key & 0xFFFF);
+}
+
+__host__ __device__ 
+static inline void UnpackSortKey(MaterialSortKey key, MaterialType& out_type, MaterialID& out_id)
+{
+    out_type = GetMaterialTypeFromSortKey(key);
+    out_id = GetMaterialIDFromSortKey(key); 
+}
+
 
 enum GeomType
 {
@@ -78,7 +97,7 @@ struct Ray
 struct Geom
 {
     enum GeomType type;
-    MaterialID materialid;
+    MaterialSortKey matSortKey;
     glm::vec3 translation;
     glm::vec3 rotation;
     glm::vec3 scale;
@@ -238,7 +257,7 @@ struct ShadeableIntersection
 {
   float t;
   glm::vec3 surfaceNormal;
-  MaterialID materialId;
+  MaterialSortKey matSortKey;
 };
 
 struct BVHIntersectResult

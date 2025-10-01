@@ -221,15 +221,15 @@ __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iteration
     }
 }
 
-struct MaterialIdComp {
-    
-    using PathIsectTuple = thrust::tuple<PathSegment, ShadeableIntersection>;
-    
-    __host__ __device__
-    bool operator()(const PathIsectTuple& a, const PathIsectTuple& b) const {
-        return thrust::get<1>(a).materialId < thrust::get<1>(b).materialId;
-    }
-};
+//struct MaterialIdComp {
+//    
+//    using PathIsectTuple = thrust::tuple<PathSegment, ShadeableIntersection>;
+//    
+//    __host__ __device__
+//    bool operator()(const PathIsectTuple& a, const PathIsectTuple& b) const {
+//        return thrust::get<1>(a).materialId < thrust::get<1>(b).materialId;
+//    }
+//};
 struct NonTerminated {
     __host__ __device__
         bool operator()(PathSegment& ps) {

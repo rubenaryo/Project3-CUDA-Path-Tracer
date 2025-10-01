@@ -12,8 +12,8 @@ __global__ void generateSortKeys(int N, const ShadeableIntersection* isects, Mat
     const ShadeableIntersection isect = isects[idx];
     if (isect.t > FLT_EPSILON)
     {
-        const Material mat = mats[isect.materialId];
-        sortKeys[idx] = BuildSortKey(mat.type, isect.materialId);
+        // TODO: maybe instead of using the sortkey buffer we can just sort directly off of this???
+        sortKeys[idx] = isect.matSortKey;
     }
     else
     {
@@ -336,7 +336,7 @@ __device__ void sceneIntersect(PathSegment& path, const SceneData& sceneData, Sh
     glm::vec3 normal;
     float t_min = FLT_MAX;
     int hit_geom_index = -1;
-    MaterialID hitMaterial = MATERIALID_INVALID;
+    MaterialSortKey hitMaterialKey = SORTKEY_INVALID;
     bool outside = true;
 
     glm::vec3 tmp_intersect;
@@ -373,7 +373,7 @@ __device__ void sceneIntersect(PathSegment& path, const SceneData& sceneData, Sh
         {
             t_min = t;
             hit_geom_index = i;
-            hitMaterial = geom.materialid;
+            hitMaterialKey = geom.matSortKey;
             intersect_point = tmp_intersect;
             normal = tmp_normal;
         }
@@ -388,7 +388,7 @@ __device__ void sceneIntersect(PathSegment& path, const SceneData& sceneData, Sh
     {
         // The ray hits something
         result.t = t_min;
-        result.materialId = hitMaterial;
+        result.matSortKey = hitMaterialKey;
         result.surfaceNormal = normal;
     }
 }

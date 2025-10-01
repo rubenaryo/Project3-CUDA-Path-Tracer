@@ -29,6 +29,7 @@ inline __device__ glm::mat3 LocalToWorld(glm::vec3 nor)
     return glm::mat3(tan, bit, nor);
 }
 
+
 inline __device__ glm::mat3 WorldToLocal(glm::vec3 nor) {
     return glm::transpose(LocalToWorld(nor));
 }
@@ -39,6 +40,16 @@ inline __device__ Ray SpawnRay(const glm::vec3& pos, const glm::vec3& wi)
     r.origin = pos + wi * 0.001f;
     r.direction = wi;
     return r;
+}
+
+////////////////////////
+// PDF functions
+
+__device__ float Pdf(const ShadeableIntersection& isect, const glm::mat4& invTfm, glm::vec3 woW, glm::vec3 wiW)
+{
+    glm::vec3 nor = isect.surfaceNormal;
+    glm::vec3 wo = multiplyMV(invTfm, glm::vec4(woW, 0.f));
+    glm::vec3 wi = multiplyMV(invTfm, glm::vec4(wiW, 0.f));
 }
 
 ////////////////////////
@@ -91,7 +102,7 @@ __global__ void skDiffuse(ShadeKernelArgs args)
 
     const PathSegment path = args.pathSegments[idx];
     const ShadeableIntersection intersection = args.shadeableIntersections[idx];
-    const Material material = args.materials[intersection.materialId];
+    const Material material = args.materials[GetMaterialIDFromSortKey(intersection.matSortKey)];
         
     HANDLE_MISS(idx, intersection, pathSegments);
 
@@ -114,7 +125,7 @@ __global__ void skDiffuseDirect(ShadeKernelArgs args)
 
     const PathSegment path = args.pathSegments[idx];
     const ShadeableIntersection intersection = args.shadeableIntersections[idx];
-    const Material material = args.materials[intersection.materialId];
+    const Material material = args.materials[GetMaterialIDFromSortKey(intersection.matSortKey)];
     thrust::default_random_engine rng = makeSeededRandomEngine(args.iter, idx, path.remainingBounces);
 
     HANDLE_MISS(idx, intersection, pathSegments);
@@ -158,7 +169,7 @@ __global__ void skDiffuseFull(ShadeKernelArgs args)
 
     const PathSegment path = args.pathSegments[idx];
     const ShadeableIntersection intersection = args.shadeableIntersections[idx];
-    const Material material = args.materials[intersection.materialId];
+    const Material material = args.materials[GetMaterialIDFromSortKey(intersection.matSortKey)];
 
     HANDLE_MISS(idx, intersection, pathSegments);
 
@@ -182,7 +193,7 @@ __global__ void skSpecular(ShadeKernelArgs args)
 
     const PathSegment path = args.pathSegments[idx];
     const ShadeableIntersection intersection = args.shadeableIntersections[idx];
-    const Material material = args.materials[intersection.materialId];
+    const Material material = args.materials[GetMaterialIDFromSortKey(intersection.matSortKey)];
 
     HANDLE_MISS(idx, intersection, pathSegments);
 
@@ -200,7 +211,7 @@ __global__ void skEmissive(ShadeKernelArgs args)
     
     const PathSegment path = args.pathSegments[idx];
     const ShadeableIntersection intersection = args.shadeableIntersections[idx];
-    const Material material = args.materials[intersection.materialId];
+    const Material material = args.materials[GetMaterialIDFromSortKey(intersection.matSortKey)];
 
     HANDLE_MISS(idx, intersection, pathSegments);
 

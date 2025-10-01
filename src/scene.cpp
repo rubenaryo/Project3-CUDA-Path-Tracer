@@ -105,7 +105,22 @@ void Scene::loadFromJSON(const std::string& jsonName)
     for (const auto& p : objectsData)
     {
         Geom newGeom = {};
-        newGeom.materialid = MatNameToID[p["MATERIAL"]];
+
+        MaterialID matId = MATERIALID_INVALID;
+        auto findIt = MatNameToID.find(p["MATERIAL"]);
+        if (findIt == MatNameToID.end())
+        {
+            // Material not found. Just assign the first material.
+            matId = 0;
+        }
+        else
+        {
+            matId = findIt->second;
+            assert(matId < materials.size());
+        }
+
+        const Material& mat = materials.at(matId);
+        newGeom.matSortKey = BuildSortKey(mat.type, matId);
 
         const auto& trans = p["TRANS"];
         const auto& rotat = p["ROTAT"];
@@ -135,7 +150,7 @@ void Scene::loadFromJSON(const std::string& jsonName)
 
             newGeom.type = GT_MESH;
             const auto& relPath = p["PATH"];
-            int meshId = loadGLTF(relPath, meshes, newGeom.materialid);
+            int meshId = loadGLTF(relPath, meshes);
 
             if (meshId == -1)
                 continue; // Mesh loading failed. Don't add it.
@@ -250,7 +265,7 @@ std::vector<T> getBufferData(const tinygltf::Model& model, int accessorIndex)
 }
 
 // Returns mesh id
-__host__ int loadGLTF(const std::string& relPath, std::vector<Mesh>& meshes, MaterialID matId)
+__host__ int loadGLTF(const std::string& relPath, std::vector<Mesh>& meshes)
 {
     tinygltf::Model model;
     tinygltf::TinyGLTF loader;

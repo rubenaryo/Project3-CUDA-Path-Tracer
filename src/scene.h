@@ -22,4 +22,4 @@ public:
     RenderState state;
 };
 
-__host__ int loadGLTF(const std::string& relPath, std::vector<Mesh>& meshes, MaterialID matId);
+__host__ int loadGLTF(const std::string& relPath, std::vector<Mesh>& meshes);
