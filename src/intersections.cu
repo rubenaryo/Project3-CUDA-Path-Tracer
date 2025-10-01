@@ -54,6 +54,8 @@ __host__ __device__ float rectIntersectionTest(const glm::vec3& posW, const glm:
     return (abs(dot(U, vi)) > radiusU || abs(dot(V, vi)) > radiusV) ? FLT_MAX : t;
 }
 
+
+
 __host__ __device__ float rectIntersectionTest(Geom rect, const glm::vec3& posW, const glm::vec3& norW,
     Ray rayWorld,
     glm::vec3& out_toLightLocal, glm::vec2& out_uv
@@ -64,6 +66,43 @@ __host__ __device__ float rectIntersectionTest(Geom rect, const glm::vec3& posW,
     float radiusV = rect.scale.z;
 
     return rectIntersectionTest(posW, norW, radiusU, radiusV, rayWorld, invTfm, out_toLightLocal, out_uv);
+}
+
+__host__ __device__ __device__ float intersectRectangle(const Geom& geom, const Ray& ray, glm::vec3& out_isectPoint, glm::vec3& out_normal)
+{
+    glm::vec3 ro = glm::vec3(geom.inverseTransform * glm::vec4(ray.origin, 1.0f));
+    glm::vec3 rd = glm::vec3(geom.inverseTransform * glm::vec4(ray.direction, 0.0f));
+
+    if (fabsf(rd.z) < FLT_EPSILON) {
+        return FLT_MAX;  // Ray is parallel, no intersection
+    }
+
+    float t = -ro.z / rd.z;
+
+    if (t < 0.0f) {
+        return FLT_MAX;
+    }
+
+    // local isect point
+    glm::vec3 objPoint = ro + t * rd;
+
+    // Check if point is inside unit square bounds [-0.5, 0.5] x [-0.5, 0.5]
+    if (objPoint.x >= -0.5f && objPoint.x <= 0.5f &&
+        objPoint.y >= -0.5f && objPoint.y <= 0.5f) {
+        
+        // Transform back to world space
+        out_isectPoint = glm::vec3(geom.transform * glm::vec4(objPoint, 1.0f));
+
+        // Transform normal to world space
+        glm::vec3 objNormal = rd.z < 0.0f ? glm::vec3(0.0f, 0.0f, 1.0f)
+            : glm::vec3(0.0f, 0.0f, -1.0f);
+
+        out_normal = glm::normalize(glm::vec3(geom.invTranspose * glm::vec4(objNormal, 0.0f)));
+
+        return t;
+    }
+
+    return FLT_MAX;
 }
 
 
@@ -416,16 +455,7 @@ __device__ void sceneIntersect(PathSegment& path, const SceneData& sceneData, Sh
         }
         else if (geom.type == GT_RECT)
         {
-            glm::vec3 pos(0.0);
-            glm::vec3 nor(0.0f, 0.0f, 1.0f);
-            glm::vec2 uv;
-            float local_t = rectIntersectionTest(geom, pos, nor, pathCopy.ray, ToLight_Local, uv);
-
-            glm::vec3 toLightWorld = multiplyMV(geom.inverseTransform, glm::vec4(ToLight_Local, 1.0f));
-            t = glm::length(toLightWorld);
-
-            tmp_intersect = toLightWorld + pathCopy.ray.origin;
-            tmp_normal = glm::vec3(glm::normalize(geom.invTranspose * glm::vec4(nor, 0.0f)));
+            t = intersectRectangle(geom, pathCopy.ray, tmp_intersect, tmp_normal);
         }
 
         // Compute the minimum t from the intersection tests to determine what
