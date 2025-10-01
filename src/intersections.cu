@@ -1,6 +1,7 @@
 #include "intersections.h"
 
 #include "bvh.h"
+#include "light.h"
 
 /// Kernel to label each intersection with additional information to be used for ray sorting and discarding
 __global__ void generateSortKeys(int N, const ShadeableIntersection* isects, Material* mats, MaterialSortKey* sortKeys)
@@ -52,6 +53,19 @@ __host__ __device__ float rectIntersectionTest(const glm::vec3& posW, const glm:
     
     return (abs(dot(U, vi)) > radiusU || abs(dot(V, vi)) > radiusV) ? FLT_MAX : t;
 }
+
+__host__ __device__ float rectIntersectionTest(Geom rect, const glm::vec3& posW, const glm::vec3& norW,
+    Ray rayWorld,
+    glm::vec3& out_toLightLocal, glm::vec2& out_uv
+)
+{
+    glm::mat4 invTfm = rect.inverseTransform;
+    float radiusU = rect.scale.x;
+    float radiusV = rect.scale.z;
+
+    return rectIntersectionTest(posW, norW, radiusU, radiusV, rayWorld, invTfm, out_toLightLocal, out_uv);
+}
+
 
 __host__ __device__ float boxIntersectionTest(
     Geom box,
@@ -368,11 +382,14 @@ __device__ void sceneIntersect(PathSegment& path, const SceneData& sceneData, Sh
     glm::vec3 normal;
     float t_min = FLT_MAX;
     int hit_geom_index = -1;
+    GeomType hit_geom_type = GT_INVALID;
     MaterialSortKey hitMaterialKey = SORTKEY_INVALID;
     bool outside = true;
 
     glm::vec3 tmp_intersect;
     glm::vec3 tmp_normal;
+    
+    glm::vec3 ToLight_Local; // TODO: This works for rect only right now
 
     const PathSegment pathCopy = path;
     
@@ -399,7 +416,16 @@ __device__ void sceneIntersect(PathSegment& path, const SceneData& sceneData, Sh
         }
         else if (geom.type == GT_RECT)
         {
-            // t = rectIntersectionTest()
+            glm::vec3 pos(0.0);
+            glm::vec3 nor(0.0f, 0.0f, 1.0f);
+            glm::vec2 uv;
+            float local_t = rectIntersectionTest(geom, pos, nor, pathCopy.ray, ToLight_Local, uv);
+
+            glm::vec3 toLightWorld = multiplyMV(geom.inverseTransform, glm::vec4(ToLight_Local, 1.0f));
+            t = glm::length(toLightWorld);
+
+            tmp_intersect = toLightWorld + pathCopy.ray.origin;
+            tmp_normal = glm::vec3(glm::normalize(geom.invTranspose * glm::vec4(nor, 0.0f)));
         }
 
         // Compute the minimum t from the intersection tests to determine what
@@ -409,6 +435,7 @@ __device__ void sceneIntersect(PathSegment& path, const SceneData& sceneData, Sh
             t_min = t;
             hit_geom_index = i;
             hitMaterialKey = geom.matSortKey;
+            hit_geom_type = geom.type;
             intersect_point = tmp_intersect;
             normal = tmp_normal;
         }
@@ -421,6 +448,15 @@ __device__ void sceneIntersect(PathSegment& path, const SceneData& sceneData, Sh
     }
     else
     {
+        MaterialType matType = GetMaterialTypeFromSortKey(hitMaterialKey);
+        if (matType == MT_EMISSIVE) 
+        {
+            assert(hit_geom_type == GT_RECT);
+
+            // We happened to hit a light.
+            //float rectPDF = 
+        }
+
         // The ray hits something
         result.t = t_min;
         result.matSortKey = hitMaterialKey;

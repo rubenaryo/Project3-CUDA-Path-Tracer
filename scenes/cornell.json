@@ -43,7 +43,7 @@
     "Objects":
     [
         {
-            "TYPE":"cube",
+            "TYPE":"rect",
             "MATERIAL":"light",
             "TRANS":[0.0,10.0,0.0],
             "ROTAT":[0.0,0.0,0.0],
@@ -99,17 +99,5 @@
             "SCALE":[0.06, 0.06, 0.06],
 			"PATH":"../scenes/meshes/Fox/Fox.gltf"
         }
-    ],
-	"Lights":
-	[
-		{
-            "TYPE":"AREA",
-			"GEOMTYPE":"RECT",
-			"EMITTANCE":3.0,
-			"RGB":[1.0,1.0,1.0],
-            "TRANS":[0.0,8.5,0.0],
-            "ROTAT":[0.0,0.0,0.0],
-            "SCALE":[3.0,0.3,3.0]
-        }
-	]
+    ]
 }

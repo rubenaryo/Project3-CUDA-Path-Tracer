@@ -45,6 +45,8 @@ __device__ bool areaLightIntersect(const Light& chosenLight, Ray r, ShadeableInt
     return out_isect.t < (FLT_MAX - FLT_EPSILON);
 }
 
+//__device__ float Pdf_Rect(const glm::vec3& halfSideLengths, const glm::vec3& view_point, const glm::vec3& light_point)
+
 __device__ float Pdf_Rect(const Light& chosenLight, const glm::vec3& view_point, const glm::vec3& light_point, const glm::vec3& norW)
 {
     using namespace glm;
