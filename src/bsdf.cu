@@ -177,7 +177,16 @@ __global__ void skDiffuse(ShadeKernelArgs args)
     glm::vec3 wiW_Li;
     float pdf_Li;
 
+    float lambert = glm::abs(glm::dot(intersection.surfaceNormal, wiW_bsdf));
+    args.pathSegments[idx].throughput *= (bsdf/pdf_bsdf) * lambert;
+    args.pathSegments[idx].prevBounceSample.pdf = pdf_bsdf;
+    args.pathSegments[idx].prevBounceSample.matType = MT_DIFFUSE;
+    args.pathSegments[idx].ray = SpawnRay(view_point, wiW_bsdf);
+    args.pathSegments[idx].remainingBounces--;
+
     // Direct Light Sampling
+    // Key difference using MIS: Accumulate direct lighting radiance here.
+    glm::vec3 throughput = args.pathSegments[idx].throughput;
     if (SolveDirectLighting(args.sceneData, intersection, view_point, rng, directRadiance, wiW_Li, pdf_Li))
     {
         float bsdf_pdf = Pdf(material.type, intersection.surfaceNormal, -path.ray.direction, wiW_Li);
@@ -187,17 +196,8 @@ __global__ void skDiffuse(ShadeKernelArgs args)
         // Assemble direct lighting components
         glm::vec3 directLightResult = args.pathSegments[idx].throughput * directRadiance * lambert_Li / pdf_Li;
         thisBounceRadiance += directLightResult * PowerHeuristic(1, pdf_Li, 1, bsdf_pdf);
+        args.pathSegments[idx].Lo += thisBounceRadiance;
     }
-
-    float lambert = glm::abs(glm::dot(intersection.surfaceNormal, wiW_bsdf));
-    args.pathSegments[idx].throughput *= (bsdf/pdf_bsdf) * lambert;
-    args.pathSegments[idx].prevBounceSample.pdf = pdf_bsdf;
-    args.pathSegments[idx].prevBounceSample.matType = MT_DIFFUSE;
-    args.pathSegments[idx].ray = SpawnRay(view_point, wiW_bsdf);
-    args.pathSegments[idx].remainingBounces--;
-
-    // Key difference using MIS: Accumulate direct lighting radiance here.
-    args.pathSegments[idx].Lo += thisBounceRadiance;
 }
 
 __global__ void skSpecular(ShadeKernelArgs args)
