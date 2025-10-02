@@ -42,6 +42,11 @@ Scene::~Scene()
         deviceMeshes.at(m).deviceCleanup();
     }
 
+    for (HostTextureHandle& h : textures)
+    {
+        if (h.texObj)
+            cudaDestroyTextureObject(h.texObj);
+    }
 }
 
 void Scene::InitDeviceMeshes()
@@ -99,7 +104,7 @@ void Scene::loadFromJSON(const std::string& jsonName)
             newMaterial.type = MT_SPECULAR;
         }
 
-        auto TryLoadAssignTexture = [p](const char* attrName, std::vector<std::string>& out_FileArr, int& out_id)
+        auto TryLoadAssignTexture = [p](const char* attrName, std::vector<HostTextureHandle>& out_handleArr, int& out_id)
         {
             if (p.find(attrName) != p.end())
             {
@@ -114,16 +119,17 @@ void Scene::loadFromJSON(const std::string& jsonName)
                     return false; // We needed this, but it doesn't exist.
                 }
 
-                out_id = out_FileArr.size();
-                out_FileArr.push_back(absoluteStr);
+                out_id = out_handleArr.size();
+                HostTextureHandle& handle = out_handleArr.emplace_back();
+                handle.filePath = std::move(absoluteStr);
             }
             return true; // We either don't need it, or do and it exists.
         };
 
-        if (!TryLoadAssignTexture("DIFFUSE_MAP", textureFiles, newMaterial.diffuseTexId))
+        if (!TryLoadAssignTexture("DIFFUSE_MAP", textures, newMaterial.diffuseTexId))
             continue;
 
-        if (!TryLoadAssignTexture("NORMAL_MAP", textureFiles, newMaterial.diffuseTexId))
+        if (!TryLoadAssignTexture("NORMAL_MAP", textures, newMaterial.diffuseTexId))
             continue;
 
         MatNameToID[name] = materials.size();

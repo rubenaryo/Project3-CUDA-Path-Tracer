@@ -230,6 +230,15 @@ struct Material
     int normalTexId = -1;
 };
 
+struct HostTextureHandle
+{
+    std::string filePath;
+    cudaTextureObject_t texObj = 0;
+    cudaArray_t cudaArr = nullptr;
+    int width = 0;
+    int height = 0;
+};
+
 struct BSDFSample
 {
     float pdf = 0.0f;

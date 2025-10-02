@@ -19,7 +19,7 @@ public:
     std::vector<Mesh> meshes;
     std::vector<Mesh> deviceMeshes;
     std::vector<BVHNode> bvhNodes;
-    std::vector<std::string> textureFiles;
+    std::vector<HostTextureHandle> textures;
     RenderState state;
 };
 

@@ -22,6 +22,9 @@
 #include "interactions.h"
 #include "bsdf.h"
 
+#include <stb_image.h>
+#include <stb_image_write.h>
+
 #define ERRORCHECK 1
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
@@ -96,6 +99,53 @@ void InitDataContainer(GuiDataContainer* imGuiData)
     guiData = imGuiData;
 }
 
+void initDeviceTextures()
+{
+    for (HostTextureHandle& h : hst_scene->textures)
+    {
+        if (h.texObj)
+            continue; // Texture is already loaded
+
+        // Load on host side
+        int channels;
+        unsigned char* h_data = stbi_load(h.filePath.c_str(), &h.width, &h.height,
+            &channels, 4); // Force RGBA
+        if (!h_data) {
+            printf("Failed to load texture: %s\n", h.filePath.c_str());
+            continue;
+        }
+
+        cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<uchar4>();
+        cudaMallocArray(&h.cudaArr, &channelDesc, h.width, h.height);
+
+        // Copy to CUDA
+        cudaMemcpy2DToArray(h.cudaArr, 0, 0, h_data,
+            h.width * 4 * sizeof(unsigned char),
+            h.width * 4 * sizeof(unsigned char),
+            h.height,
+            cudaMemcpyHostToDevice);
+
+        cudaResourceDesc resDesc = {};
+        resDesc.resType = cudaResourceTypeArray;
+        resDesc.res.array.array = h.cudaArr;
+
+        cudaTextureDesc texDesc = {};
+        texDesc.addressMode[0] = cudaAddressModeWrap;
+        texDesc.addressMode[1] = cudaAddressModeWrap;
+        texDesc.filterMode = cudaFilterModeLinear;
+        texDesc.readMode = cudaReadModeNormalizedFloat;
+        texDesc.normalizedCoords = 1;
+
+        // Hold tex obj handle on host
+        cudaCreateTextureObject(&h.texObj, &resDesc, &texDesc, nullptr);
+
+        // Free host alloc
+        stbi_image_free(h_data);
+    }
+
+    checkCUDAError("initDeviceTextures");
+}
+
 void pathtraceInit(Scene* scene)
 {
     hst_scene = scene;
@@ -128,6 +178,8 @@ void pathtraceInit(Scene* scene)
 
     cudaMalloc(&dev_sortKeys, pixelcount * sizeof(MaterialSortKey));
     thrust::fill(thrust::device, dev_sortKeys, dev_sortKeys + pixelcount, SORTKEY_INVALID);
+
+    initDeviceTextures();
 
     checkCUDAError("pathtraceInit");
 }
