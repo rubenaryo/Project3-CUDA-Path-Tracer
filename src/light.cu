@@ -79,15 +79,14 @@ __device__ glm::vec3 DirectSampleAreaLight(glm::vec3 view_point, glm::vec3 view_
             out_wiW = -toLightW;
             out_pdf = distToLightSq / (cosTheta * surfaceArea);
 
-            return numLights * chosenLight.emittance * chosenLight.color;
+            return chosenLight.emittance * chosenLight.color;
         }
         break;
     default:
         // TODO
     }
 
-    float Le = chosenLight.emittance;
-    return Le * numLights * chosenLight.color;
+    return chosenLight.emittance * chosenLight.color;
 }
 
 __device__ glm::vec3 Sample_Li(glm::vec3 view_point, glm::vec3 nor, const Light& chosenLight, int numLights, thrust::default_random_engine& rng, glm::vec3& out_wiW, float& out_pdf, float& out_distToLight)

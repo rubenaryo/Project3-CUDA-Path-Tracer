@@ -175,27 +175,15 @@ __global__ void skDiffuseDirect(ShadeKernelArgs args)
     const int NUM_SAMPLES = 4;
     for (int s = 0; s != NUM_SAMPLES; ++s)
     {
-        float distToLight;
-        int randomLightIndex = iu0N(rng);
-        const Light chosenLight = lights[randomLightIndex];
-
-        glm::vec3 liResult = Sample_Li(view_point, intersection.surfaceNormal, chosenLight, numLights, rng, wiW, pdf, distToLight);
-        if (pdf < FLT_EPSILON)
-            continue;
-
-        PathSegment shadowPath;
-        shadowPath.ray = SpawnRay(view_point,wiW);
-        ShadeableIntersection shadowTestResult;
-        sceneIntersect(shadowPath, args.sceneData, shadowTestResult, chosenLight.geomId);
-        
-        if (shadowTestResult.t >= 0.0f && shadowTestResult.t < (distToLight- FLT_EPSILON))
+        glm::vec3 radiance;
+        if (!SolveDirectLighting(args.sceneData, intersection, view_point, rng, radiance, wiW, pdf))
             continue;
 
         float cosTheta = glm::dot(wiW, intersection.surfaceNormal);
         if (cosTheta < FLT_EPSILON)
             continue;
 
-        totalDirectLight += chosenLight.color * chosenLight.emittance * cosTheta / (NUM_SAMPLES * pdf);
+        totalDirectLight += radiance * cosTheta / (NUM_SAMPLES * pdf);
     }
     totalDirectLight *= numLights;
 
@@ -348,6 +336,8 @@ __global__ void skRefractive(ShadeKernelArgs args)
 }
 
 // By convention: MUST match the order of the MaterialType struct
+
+#if MIS_SAMPLING
 static ShadeKernel sKernels[] =
 {
     skDiffuse,
@@ -355,6 +345,23 @@ static ShadeKernel sKernels[] =
     skEmissive,
     skRefractive
 };
+#elif DIRECT_SAMPLING
+static ShadeKernel sKernels[] =
+{
+    skDiffuseDirect,
+    skSpecular,
+    skEmissiveSimple,
+    skRefractive
+};
+#else BASIC_BSDF_SAMPLING
+static ShadeKernel sKernels[] =
+{
+    skDiffuseSimple,
+    skSpecular,
+    skEmissiveSimple,
+    skRefractive
+};
+#endif
 
 __host__ ShadeKernel getShadingKernelForMaterial(MaterialType mt)
 {

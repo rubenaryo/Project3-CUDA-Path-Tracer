@@ -14,6 +14,10 @@
 #define STOCHASTIC_AA 1
 #define USE_BVH 1
 
+#define MIS_SAMPLING 1
+#define DIRECT_SAMPLING (0 && !MIS_SAMPLING)
+#define ONLY_BSDF_SAMPLING (0 && !MIS_SAMPLING && !DIRECT_SAMPLING)
+
 typedef uint32_t LightID;
 typedef uint16_t MaterialID;
 typedef uint32_t MaterialSortKey;
