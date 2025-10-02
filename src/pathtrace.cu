@@ -88,7 +88,7 @@ static PathSegment* dev_paths = NULL;
 static ShadeableIntersection* dev_intersections = NULL;
 static MaterialSortKey* dev_sortKeys = NULL;  // Parallel array of flags to mark material type.
 static cudaTextureObject_t* dev_textureObjs = NULL;
-static cudaTextureObject_t* dev_envMapObjs = NULL;
+static cudaTextureObject_t* dev_envMapObjs = NULL; // Allowed to remain NULL if scene does not support env map
 
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
@@ -110,7 +110,12 @@ __host__ bool AllocDeviceTexture(HostTextureHandle& h, bool envMap)
 
     // Load on host side
     int channels;
-    void* h_data = stbi_load(h.filePath.c_str(), &h.width, &h.height, &channels, 4);
+    void* h_data = nullptr;
+    
+    if (envMap)
+        h_data = stbi_loadf(h.filePath.c_str(), &h.width, &h.height, &channels, 4);
+    else
+        h_data = stbi_load(h.filePath.c_str(), &h.width, &h.height, &channels, 4);
 
     if (!h_data) {
         printf("Failed to load texture: %s\n", h.filePath.c_str());
@@ -165,6 +170,18 @@ void initDeviceTextures()
     cudaMalloc(&dev_textureObjs, hst_scene->textures.size() * sizeof(cudaTextureObject_t));
     cudaMemcpy(dev_textureObjs, tempHostArr.data(), tempHostArr.size() * sizeof(cudaTextureObject_t), cudaMemcpyHostToDevice);
 
+    if (!hst_scene->envMapHandle.filePath.empty()) // Scene verifies that this exists
+    {
+        if (AllocDeviceTexture(hst_scene->envMapHandle, true))
+        {
+            assert(hst_scene->envMapHandle.texObj != 0);
+            static const int NUM_SUPPORTED_ENV_MAPS = 1;
+
+            cudaMalloc(&dev_envMapObjs, NUM_SUPPORTED_ENV_MAPS * sizeof(cudaTextureObject_t));
+            cudaMemcpy(dev_envMapObjs, &hst_scene->envMapHandle.texObj, NUM_SUPPORTED_ENV_MAPS * sizeof(cudaTextureObject_t), cudaMemcpyHostToDevice);
+        }
+    }
+
     checkCUDAError("initDeviceTextures");
 }
 
@@ -218,6 +235,7 @@ void pathtraceFree()
     cudaFree(dev_intersections);
     cudaFree(dev_sortKeys);
     cudaFree(dev_textureObjs);
+    cudaFree(dev_envMapObjs);
 
     checkCUDAError("pathtraceFree");
 }
