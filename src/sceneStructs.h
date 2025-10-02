@@ -202,7 +202,7 @@ struct Light
     glm::vec3 color = glm::vec3(0.0f);
     
     float emittance;
-    LightID id;
+    int geomId = -1;
     LightType lightType;
     GeomType geomType;
 };
@@ -269,6 +269,7 @@ struct ShadeableIntersection
   float t;
   glm::vec3 surfaceNormal;
   MaterialSortKey matSortKey;
+  int hitGeomIdx = -1;
 };
 
 struct BVHIntersectResult

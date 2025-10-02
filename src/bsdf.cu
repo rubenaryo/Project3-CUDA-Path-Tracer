@@ -99,15 +99,13 @@ __device__ bool SolveDirectLighting(const SceneData& sd, ShadeableIntersection i
         return false;
 
     // Test occlusion
-    {
-        PathSegment shadowPath;
-        shadowPath.ray = SpawnRay(view_point, wiW_Li);
-        ShadeableIntersection shadowTestResult;
-        sceneIntersect(shadowPath, sd, shadowTestResult);
-
-        if (shadowTestResult.t >= 0.0f && shadowTestResult.t < (distToLight - FLT_EPSILON))
-            return false;
-    }
+    PathSegment shadowPath;
+    shadowPath.ray = SpawnRay(view_point, wiW_Li);
+    ShadeableIntersection shadowTestResult;
+    sceneIntersect(shadowPath, sd, shadowTestResult, chosenLight.geomId);
+    
+    if (shadowTestResult.t >= 0.0f && shadowTestResult.t < (distToLight - FLT_EPSILON))
+        return false;
 
     out_radiance = liResult;
     out_wiW = wiW_Li;
@@ -130,7 +128,7 @@ __device__ bool SolveDirectLighting(const SceneData& sd, ShadeableIntersection i
         }
 #endif
 
-__global__ void skDiffuse(ShadeKernelArgs args)
+__global__ void skDiffuseSimple(ShadeKernelArgs args)
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= args.num_paths)
@@ -174,7 +172,7 @@ __global__ void skDiffuseDirect(ShadeKernelArgs args)
     glm::vec3 view_point = path.ray.origin + (intersection.t * path.ray.direction);
     glm::vec3 totalDirectLight(0.0f);
     glm::vec3 bsdf = f_diffuse(material.color);
-    const int NUM_SAMPLES = 1;
+    const int NUM_SAMPLES = 4;
     for (int s = 0; s != NUM_SAMPLES; ++s)
     {
         float distToLight;
@@ -182,19 +180,20 @@ __global__ void skDiffuseDirect(ShadeKernelArgs args)
         const Light chosenLight = lights[randomLightIndex];
 
         glm::vec3 liResult = Sample_Li(view_point, intersection.surfaceNormal, chosenLight, numLights, rng, wiW, pdf, distToLight);
-        //if (pdf < FLT_EPSILON)
-        //    continue;
-        //PathSegment shadowPath;
-        //shadowPath.ray = SpawnRay(view_point, wiW);
-        //ShadeableIntersection shadowTestResult;
-        //sceneIntersect(shadowPath, args.sceneData, shadowTestResult);
-        //
-        //if (shadowTestResult.t >= 0.0f && shadowTestResult.t < (distToLight - FLT_EPSILON))
-        //    continue;
+        if (pdf < FLT_EPSILON)
+            continue;
 
-        float cosTheta = fmaxf(glm::dot(wiW, intersection.surfaceNormal), 0.0f);
-        //if (cosTheta < FLT_EPSILON)
-        //    continue;
+        PathSegment shadowPath;
+        shadowPath.ray = SpawnRay(view_point,wiW);
+        ShadeableIntersection shadowTestResult;
+        sceneIntersect(shadowPath, args.sceneData, shadowTestResult, chosenLight.geomId);
+        
+        if (shadowTestResult.t >= 0.0f && shadowTestResult.t < (distToLight- FLT_EPSILON))
+            continue;
+
+        float cosTheta = glm::dot(wiW, intersection.surfaceNormal);
+        if (cosTheta < FLT_EPSILON)
+            continue;
 
         //
         totalDirectLight += chosenLight.color * chosenLight.emittance * cosTheta / (NUM_SAMPLES * pdf);
@@ -203,11 +202,13 @@ __global__ void skDiffuseDirect(ShadeKernelArgs args)
     totalDirectLight *= numLights;
 
     args.pathSegments[idx].throughput *= bsdf;
-    args.pathSegments[idx].Lo += totalDirectLight;
+    glm::vec3 throughput = args.pathSegments[idx].throughput;
+
+    args.pathSegments[idx].Lo += throughput * totalDirectLight;
     args.pathSegments[idx].remainingBounces = 0;
 }
 
-__global__ void skDiffuseFull(ShadeKernelArgs args)
+__global__ void skDiffuse(ShadeKernelArgs args)
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= args.num_paths)
@@ -259,9 +260,10 @@ __global__ void skDiffuseFull(ShadeKernelArgs args)
     args.pathSegments[idx].prevBounceSample.pdf = pdf_bsdf;
     args.pathSegments[idx].prevBounceSample.matType = MT_DIFFUSE;
     args.pathSegments[idx].ray = SpawnRay(view_point, wiW_bsdf);
-    args.pathSegments[idx].remainingBounces = 0;
+    args.pathSegments[idx].remainingBounces--;
 
     // Key difference with MIS: Accumulate direct lighting radiance here.
+    //assert(glm::any(glm::isnan(thisBounceRadiance)) == false);
     args.pathSegments[idx].Lo += thisBounceRadiance;
 }
 
@@ -283,7 +285,7 @@ __global__ void skSpecular(ShadeKernelArgs args)
     args.pathSegments[idx].remainingBounces--;
 }
 
-__global__ void skEmissive(ShadeKernelArgs args)
+__global__ void skEmissiveSimple(ShadeKernelArgs args)
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= args.num_paths)
@@ -300,7 +302,7 @@ __global__ void skEmissive(ShadeKernelArgs args)
     args.pathSegments[idx].remainingBounces = 0; // Mark it for culling later
 }
 
-__global__ void skEmissiveMIS(ShadeKernelArgs args)
+__global__ void skEmissive(ShadeKernelArgs args)
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= args.num_paths)
@@ -312,21 +314,36 @@ __global__ void skEmissiveMIS(ShadeKernelArgs args)
 
     HANDLE_MISS(idx, intersection, pathSegments);
 
-    // TODO_MIS: Do the power heuristic here for MIS.
+    assert(material.type == MT_EMISSIVE);
+    
     glm::vec3 totalRadiance(0.0f);
+    glm::vec3 throughput = args.pathSegments[idx].throughput;
     if (args.depth == 0) // If this is the first bounce, there is no "previous" data to go off
     {
         totalRadiance = material.color * material.emittance;
     }
     else
     {
+        if (intersection.hitGeomIdx == -1)
+        {
+            // Error: this intersection should have geometry associated with it.
+            args.pathSegments[idx].Lo = glm::vec3(0.0f);
+            args.pathSegments[idx].remainingBounces = 0;
+            return;
+        }
         // TODO: Check that path.previous is not specular
+        glm::mat4 geomTfm = args.sceneData.geoms[intersection.hitGeomIdx].transform; // TODO: Maybe just hold the tfm (and type) instead.
+        thrust::default_random_engine rng = makeSeededRandomEngine(args.iter, idx, path.remainingBounces);
+        thrust::uniform_int_distribution<float> uH(-0.5f, 0.5f);
+        glm::vec4 randPosLocal(uH(rng), uH(rng), 0.0f, 1.0f);
+        glm::vec3 randPosWorld = glm::vec3(geomTfm * randPosLocal);
 
-        //float lightPdf 
+        float lightPdf = Pdf_Rect(geomTfm, path.ray.origin, randPosWorld, intersection.surfaceNormal);
+        float bsdfPdf = path.prevBounceSample.pdf;
+        totalRadiance += (material.color * material.emittance) * throughput * PowerHeuristic(1, bsdfPdf, 1, lightPdf);
     }
-
-    glm::vec3 throughput = args.pathSegments[idx].throughput;
-    args.pathSegments[idx].Lo += (material.color * material.emittance) * throughput;
+    volatile glm::vec3 loCopy = args.pathSegments[idx].Lo;
+    args.pathSegments[idx].Lo += totalRadiance;
     args.pathSegments[idx].remainingBounces = 0; // Mark it for culling later
 }
 
@@ -338,7 +355,7 @@ __global__ void skRefractive(ShadeKernelArgs args)
 // By convention: MUST match the order of the MaterialType struct
 static ShadeKernel sKernels[] =
 {
-    skDiffuseDirect,
+    skDiffuse,
     skSpecular,
     skEmissive,
     skRefractive

@@ -105,6 +105,7 @@ void Scene::loadFromJSON(const std::string& jsonName)
     for (const auto& p : objectsData)
     {
         Geom newGeom = {};
+        int geomId = geoms.size();
 
         MaterialID matId = MATERIALID_INVALID;
         auto findIt = MatNameToID.find(p["MATERIAL"]);
@@ -180,6 +181,7 @@ void Scene::loadFromJSON(const std::string& jsonName)
             newLight.translation = newGeom.translation;
             newLight.rotation = newGeom.rotation;
             newLight.scale = newGeom.scale;
+            newLight.geomId = geomId;
 
             newLight.geomType = newGeom.type;
             newLight.lightType = LT_AREA;

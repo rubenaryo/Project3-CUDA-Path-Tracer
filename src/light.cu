@@ -47,26 +47,23 @@ __device__ bool areaLightIntersect(const Light& chosenLight, Ray r, ShadeableInt
 
 //__device__ float Pdf_Rect(const glm::vec3& halfSideLengths, const glm::vec3& view_point, const glm::vec3& light_point)
 
-__device__ float Pdf_Rect(const Light& chosenLight, const glm::vec3& view_point, const glm::vec3& light_point, const glm::vec3& norW)
+__device__ float Pdf_Rect(const glm::mat4& lightTfm, const glm::vec3& view_point, const glm::vec3& light_point, const glm::vec3& norW)
 {
     using namespace glm;
 
-    float scaleX = chosenLight.scale.x;
-    float scaleZ = chosenLight.scale.z;
-
-    float surfaceArea = (scaleX) * (scaleZ);
+    float surfaceArea = getRectArea(lightTfm);
     float areaPDF = 1.0 / surfaceArea;
 
-    vec3 lightToSurface = view_point - light_point;
-    vec3 normalizedLightToSurface = normalize(lightToSurface);
-    //vec3 norWorld = (chosenLight.transform * vec4(nor, 0.0)).xyz;
-    float cosTheta = abs(dot(normalize(norW), normalizedLightToSurface));
-    float r = length(lightToSurface);
+    vec3 toLight = light_point - view_point;
+    float r2 = glm::dot(toLight, toLight);
+    vec3 toLightNormalized = normalize(toLight);
+    float cosTheta = abs(dot(normalize(norW), -toLightNormalized));
+    float r = sqrt(r2);
 
     //if (cosTheta < 0.01)
     //    return 0.0;
 
-    return (r * r / cosTheta) * areaPDF;
+    return areaPDF * r2 / cosTheta;
 }
 
 __device__ float Pdf_Li(const Light& chosenLight, const glm::vec3& view_point, const glm::vec3& norW, const glm::vec3& wiW)
@@ -85,7 +82,7 @@ __device__ float Pdf_Li(const Light& chosenLight, const glm::vec3& view_point, c
     switch (chosenLight.geomType)
     {
     case GT_RECT:
-        return Pdf_Rect(chosenLight, view_point, light_point, norW);
+        //return Pdf_Rect(chosenLight, view_point, light_point, norW);
         break;
     }
 
@@ -105,14 +102,14 @@ __device__ glm::vec3 DirectSampleAreaLight(glm::vec3 view_point, glm::vec3 view_
             glm::vec4 norLocal(0.0f, 0.0f, 1.0f, 0.0f);
 
             glm::vec3 randPosWorld(chosenLight.transform * randPosLocal);
-            glm::vec3 norWorld(chosenLight.transform * norLocal);
+            glm::vec3 norWorld(chosenLight.invTranspose * norLocal);
 
             glm::vec3 edge1 = glm::vec3(chosenLight.transform * glm::vec4(1.0f, 0.0f, 0.0f, 0.0f));
             glm::vec3 edge2 = glm::vec3(chosenLight.transform * glm::vec4(0.0f, 1.0f, 0.0f, 0.0f));
 
             // Area is magnitude of cross product
             float surfaceArea = glm::length(glm::cross(edge1, edge2));
-            if (surfaceArea < FLT_MAX)
+            if (surfaceArea < FLT_EPSILON)
             {
                 // surface area is too small, early out.
                 out_pdf = 0.0f;
@@ -130,8 +127,8 @@ __device__ glm::vec3 DirectSampleAreaLight(glm::vec3 view_point, glm::vec3 view_
             	return glm::vec3(0.0f);
             }
 
-            toLightW *= glm::inversesqrt(distToLightSq); // normalize
-            float cosTheta = (glm::dot(norWorld, toLightW));
+            toLightW /= disttoLight; // normalize
+            float cosTheta = (glm::dot(norWorld, -toLightW));
             if (cosTheta < 0.0f)
             {
                 out_pdf = 0.0f;
@@ -139,7 +136,7 @@ __device__ glm::vec3 DirectSampleAreaLight(glm::vec3 view_point, glm::vec3 view_
             }
             
             out_distToLight = disttoLight;
-            out_wiW = toLightW;
+            out_wiW = -toLightW;
             out_pdf = distToLightSq / (cosTheta * surfaceArea);
 
             return numLights * chosenLight.emittance * chosenLight.color;

@@ -37,4 +37,4 @@ typedef void(*ShadeKernel)(ShadeKernelArgs args);
 
 __host__ ShadeKernel getShadingKernelForMaterial(MaterialType mt);
 
-__global__ void skDiffuse(ShadeKernelArgs args); // Keep this around for legacy shading
+__global__ void skDiffuseSimple(ShadeKernelArgs args); // Keep this around for legacy shading

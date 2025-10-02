@@ -22,6 +22,15 @@ __global__ void generateSortKeys(int N, const ShadeableIntersection* isects, Mat
     }
 }
 
+// Get the area of the rectangle in world space from its tfm
+__device__ float getRectArea(const glm::mat4& rectTfm)
+{
+    glm::vec3 edge1 = glm::vec3(rectTfm * glm::vec4(1.0f, 0.0f, 0.0f, 0.0f));
+    glm::vec3 edge2 = glm::vec3(rectTfm * glm::vec4(0.0f, 1.0f, 0.0f, 0.0f));
+
+    return glm::length(glm::cross(edge1, edge2));
+}
+
 // From CIS 561
 __host__ __device__ float rectIntersectionTest(const glm::vec3& posW, const glm::vec3& norW,
     float radiusU, float radiusV,
@@ -414,7 +423,7 @@ __host__ __device__  float meshIntersectionTest(Geom meshGeom, const SceneData& 
     return -1.0f;
 }
 
-__device__ void sceneIntersect(PathSegment& path, const SceneData& sceneData, ShadeableIntersection& result)
+__device__ void sceneIntersect(PathSegment& path, const SceneData& sceneData, ShadeableIntersection& result, int ignoreGeomId)
 {
     float t;
     glm::vec3 intersect_point;
@@ -438,6 +447,8 @@ __device__ void sceneIntersect(PathSegment& path, const SceneData& sceneData, Sh
     for (int i = 0; i < geoms_size; i++)
     {
         const Geom geom = geoms[i];
+        if (i == ignoreGeomId)
+            continue;
 
         if (geom.type == GT_CUBE)
         {
@@ -491,10 +502,6 @@ __device__ void sceneIntersect(PathSegment& path, const SceneData& sceneData, Sh
         result.t = t_min;
         result.matSortKey = hitMaterialKey;
         result.surfaceNormal = normal;
+        result.hitGeomIdx = hit_geom_index; // TODO: evaluate whether this is necessary (maybe just copy the geom transform?)
     }
-}
-
-__device__ void lightsIntersect(PathSegment& path, const Light* lights, int lights_size, ShadeableIntersection& result, LightID& resultId)
-{
-    // TODO_MIS
 }

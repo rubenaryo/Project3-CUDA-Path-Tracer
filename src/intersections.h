@@ -22,6 +22,8 @@ __host__ __device__ inline unsigned int utilhash(unsigned int a)
 
 __global__ void generateSortKeys(int N, const ShadeableIntersection* isects, Material* mats, MaterialSortKey* flags);
 
+__device__ float getRectArea(const glm::mat4& rectTfm);
+
 // CHECKITOUT
 /**
  * Compute a point at parameter value `t` on ray `r`.
@@ -98,7 +100,8 @@ __host__ __device__ float meshIntersectionTest(
 __device__ void sceneIntersect(
     PathSegment& path,
     const SceneData& sceneData,
-    ShadeableIntersection& result
+    ShadeableIntersection& result,
+    int ignoreGeomId = -1
 );
 
 __device__ void lightsIntersect(

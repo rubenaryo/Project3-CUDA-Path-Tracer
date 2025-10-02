@@ -220,7 +220,7 @@ __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iteration
         PathSegment iterationPath = iterationPaths[index];
 
         const glm::vec3 RADIANCE_UPPER_BOUND(1000000000000.0f);
-        assert(glm::lessThan(iterationPath.Lo, RADIANCE_UPPER_BOUND));
+        assert(glm::all(glm::lessThan(iterationPath.Lo, RADIANCE_UPPER_BOUND)));
         image[iterationPath.pixelIndex] += glm::clamp(iterationPath.Lo, glm::vec3(0.0f), RADIANCE_UPPER_BOUND);
     }
 }
@@ -345,7 +345,7 @@ __host__ void shadeLegacy(int num_paths, int iter, int depth)
     };
 
     dim3 numblocksPathSegmentTracing = (num_paths + BLOCK_SIZE_1D - 1) / BLOCK_SIZE_1D;
-    skDiffuse<<<numblocksPathSegmentTracing, BLOCK_SIZE_1D >>>(skArgs);
+    skDiffuseSimple<<<numblocksPathSegmentTracing, BLOCK_SIZE_1D >>>(skArgs);
 }
 
 __host__ int cullTerminatedPaths(int num_paths)
@@ -361,7 +361,7 @@ __host__ int cullTerminatedPaths(int num_paths)
  */
 void pathtrace(uchar4* pbo, int frame, int iter)
 {
-    const int traceDepth = hst_scene->state.traceDepth;
+    const int maxDepth = hst_scene->state.traceDepth;
     const Camera& cam = hst_scene->state.camera;
     const int pixelcount = cam.resolution.x * cam.resolution.y;
 
@@ -381,7 +381,7 @@ void pathtrace(uchar4* pbo, int frame, int iter)
     sd.bvhNodes = dev_bvhNodes;
     sd.bvhNodes_size = hst_scene->bvhNodes.size();
 
-    generateRayFromCamera<<<blocksPerGrid2d, blockSize2d>>>(cam, iter, traceDepth, dev_paths);
+    generateRayFromCamera<<<blocksPerGrid2d, blockSize2d>>>(cam, iter, maxDepth, dev_paths);
     checkCUDAError("generate camera ray");
 
     int depth = 0;
@@ -407,7 +407,6 @@ void pathtrace(uchar4* pbo, int frame, int iter)
         );
         checkCUDAError("trace one bounce");
         cudaDeviceSynchronize();
-        depth++;
 
     #if STREAM_COMPACTION || MATERIAL_SORT
         // Flag intersections by material type. We will use this to sort the path and isect arrays
@@ -436,7 +435,8 @@ void pathtrace(uchar4* pbo, int frame, int iter)
         num_paths = cullTerminatedPaths(num_paths);
         // TODO_WAVEFRONT: Regenerate paths
     #endif
-        iterationComplete = depth >= traceDepth || num_paths == 0; // TODO: should be based off stream compaction results.
+        iterationComplete = depth >= maxDepth || num_paths == 0;
+        depth++;
 
         if (guiData != NULL)
         {
