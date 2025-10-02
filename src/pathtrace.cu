@@ -339,9 +339,12 @@ __host__ void shadeLegacy(int num_paths, int iter, int depth)
         , dev_materials
         // TODO: Need to pass SceneData here
     };
+    void* cudaKernelArgs[] = { &skArgs };
 
     dim3 numblocksPathSegmentTracing = (num_paths + BLOCK_SIZE_1D - 1) / BLOCK_SIZE_1D;
-    skDiffuseSimple<<<numblocksPathSegmentTracing, BLOCK_SIZE_1D >>>(skArgs);
+    ShadeKernel sk = getShadingKernelForMaterial(MT_DIFFUSE);
+    cudaLaunchKernel(sk, numblocksPathSegmentTracing, BLOCK_SIZE_1D, cudaKernelArgs, 0, nullptr);
+    checkCUDAError("cudaLaunchKernel: shadingKernel");
 }
 
 __host__ int cullTerminatedPaths(int num_paths)

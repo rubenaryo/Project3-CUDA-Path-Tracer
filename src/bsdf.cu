@@ -128,72 +128,6 @@ __device__ bool SolveDirectLighting(const SceneData& sd, ShadeableIntersection i
         }
 #endif
 
-__global__ void skDiffuseSimple(ShadeKernelArgs args)
-{
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx >= args.num_paths)
-        return;
-
-    const PathSegment path = args.pathSegments[idx];
-    const ShadeableIntersection intersection = args.shadeableIntersections[idx];
-    const Material material = args.materials[GetMaterialIDFromSortKey(intersection.matSortKey)];
-        
-    HANDLE_MISS(idx, intersection, pathSegments);
-
-    thrust::default_random_engine rng = makeSeededRandomEngine(args.iter, idx, path.remainingBounces);
-
-    glm::vec3 wi = calculateRandomDirectionInHemisphere(intersection.surfaceNormal, rng);
-    glm::vec3 bsdf = f_diffuse(material.color);
-    glm::vec3 lightTransportResult = bsdf * PI; // Normally (bsdf*lambert)/pdf but this is simplified
-
-    args.pathSegments[idx].throughput *= lightTransportResult;
-    args.pathSegments[idx].ray = SpawnRay(path.ray.origin + intersection.t * path.ray.direction, wi);
-    args.pathSegments[idx].remainingBounces--;
-}
-
-__global__ void skDiffuseDirect(ShadeKernelArgs args)
-{
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx >= args.num_paths)
-        return;
-
-    const PathSegment path = args.pathSegments[idx];
-    const ShadeableIntersection intersection = args.shadeableIntersections[idx];
-    const Material material = args.materials[GetMaterialIDFromSortKey(intersection.matSortKey)];
-    thrust::default_random_engine rng = makeSeededRandomEngine(args.iter, idx, path.remainingBounces);
-
-    HANDLE_MISS(idx, intersection, pathSegments);
-
-    Light* lights = args.sceneData.lights;
-    int numLights = args.sceneData.lights_size;
-    thrust::uniform_int_distribution<int> iu0N(0, numLights - 1);
-    glm::vec3 wiW;
-    float pdf;
-    glm::vec3 view_point = path.ray.origin + (intersection.t * path.ray.direction);
-    glm::vec3 totalDirectLight(0.0f);
-    glm::vec3 bsdf = f_diffuse(material.color);
-    const int NUM_SAMPLES = 4;
-    for (int s = 0; s != NUM_SAMPLES; ++s)
-    {
-        glm::vec3 radiance;
-        if (!SolveDirectLighting(args.sceneData, intersection, view_point, rng, radiance, wiW, pdf))
-            continue;
-
-        float cosTheta = glm::dot(wiW, intersection.surfaceNormal);
-        if (cosTheta < FLT_EPSILON)
-            continue;
-
-        totalDirectLight += radiance * cosTheta / (NUM_SAMPLES * pdf);
-    }
-    totalDirectLight *= numLights;
-
-    args.pathSegments[idx].throughput *= bsdf;
-    glm::vec3 throughput = args.pathSegments[idx].throughput;
-
-    args.pathSegments[idx].Lo += throughput * totalDirectLight;
-    args.pathSegments[idx].remainingBounces = 0;
-}
-
 __global__ void skDiffuse(ShadeKernelArgs args)
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -268,23 +202,6 @@ __global__ void skSpecular(ShadeKernelArgs args)
     args.pathSegments[idx].remainingBounces--;
 }
 
-__global__ void skEmissiveSimple(ShadeKernelArgs args)
-{
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx >= args.num_paths)
-        return;
-    
-    const PathSegment path = args.pathSegments[idx];
-    const ShadeableIntersection intersection = args.shadeableIntersections[idx];
-    const Material material = args.materials[GetMaterialIDFromSortKey(intersection.matSortKey)];
-
-    HANDLE_MISS(idx, intersection, pathSegments);
-
-    glm::vec3 throughput = args.pathSegments[idx].throughput;
-    args.pathSegments[idx].Lo += (material.color * material.emittance) * throughput;
-    args.pathSegments[idx].remainingBounces = 0; // Mark it for culling later
-}
-
 __global__ void skEmissive(ShadeKernelArgs args)
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -335,6 +252,95 @@ __global__ void skRefractive(ShadeKernelArgs args)
     return; // TODO
 }
 
+#if ONLY_BSDF_SAMPLING
+__global__ void skDiffuseSimple(ShadeKernelArgs args)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= args.num_paths)
+        return;
+
+    const PathSegment path = args.pathSegments[idx];
+    const ShadeableIntersection intersection = args.shadeableIntersections[idx];
+    const Material material = args.materials[GetMaterialIDFromSortKey(intersection.matSortKey)];
+
+    HANDLE_MISS(idx, intersection, pathSegments);
+
+    thrust::default_random_engine rng = makeSeededRandomEngine(args.iter, idx, path.remainingBounces);
+
+    glm::vec3 wi = calculateRandomDirectionInHemisphere(intersection.surfaceNormal, rng);
+    glm::vec3 bsdf = f_diffuse(material.color);
+    glm::vec3 lightTransportResult = bsdf * PI; // Normally (bsdf*lambert)/pdf but this is simplified
+
+    args.pathSegments[idx].throughput *= lightTransportResult;
+    args.pathSegments[idx].ray = SpawnRay(path.ray.origin + intersection.t * path.ray.direction, wi);
+    args.pathSegments[idx].remainingBounces--;
+}
+#endif
+
+#if DIRECT_SAMPLING
+__global__ void skDiffuseDirect(ShadeKernelArgs args)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= args.num_paths)
+        return;
+
+    const PathSegment path = args.pathSegments[idx];
+    const ShadeableIntersection intersection = args.shadeableIntersections[idx];
+    const Material material = args.materials[GetMaterialIDFromSortKey(intersection.matSortKey)];
+    thrust::default_random_engine rng = makeSeededRandomEngine(args.iter, idx, path.remainingBounces);
+
+    HANDLE_MISS(idx, intersection, pathSegments);
+
+    Light* lights = args.sceneData.lights;
+    int numLights = args.sceneData.lights_size;
+    thrust::uniform_int_distribution<int> iu0N(0, numLights - 1);
+    glm::vec3 wiW;
+    float pdf;
+    glm::vec3 view_point = path.ray.origin + (intersection.t * path.ray.direction);
+    glm::vec3 totalDirectLight(0.0f);
+    glm::vec3 bsdf = f_diffuse(material.color);
+    const int NUM_SAMPLES = 4;
+    for (int s = 0; s != NUM_SAMPLES; ++s)
+    {
+        glm::vec3 radiance;
+        if (!SolveDirectLighting(args.sceneData, intersection, view_point, rng, radiance, wiW, pdf))
+            continue;
+
+        float cosTheta = glm::dot(wiW, intersection.surfaceNormal);
+        if (cosTheta < FLT_EPSILON)
+            continue;
+
+        totalDirectLight += radiance * cosTheta / (NUM_SAMPLES * pdf);
+    }
+    totalDirectLight *= numLights;
+
+    args.pathSegments[idx].throughput *= bsdf;
+    glm::vec3 throughput = args.pathSegments[idx].throughput;
+
+    args.pathSegments[idx].Lo += throughput * totalDirectLight;
+    args.pathSegments[idx].remainingBounces = 0;
+}
+#endif
+
+#if DIRECT_SAMPLING || ONLY_BSDF_SAMPLING
+__global__ void skEmissiveSimple(ShadeKernelArgs args)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= args.num_paths)
+        return;
+
+    const PathSegment path = args.pathSegments[idx];
+    const ShadeableIntersection intersection = args.shadeableIntersections[idx];
+    const Material material = args.materials[GetMaterialIDFromSortKey(intersection.matSortKey)];
+
+    HANDLE_MISS(idx, intersection, pathSegments);
+
+    glm::vec3 throughput = args.pathSegments[idx].throughput;
+    args.pathSegments[idx].Lo += (material.color * material.emittance) * throughput;
+    args.pathSegments[idx].remainingBounces = 0; // Mark it for culling later
+}
+#endif
+
 // By convention: MUST match the order of the MaterialType struct
 
 #if MIS_SAMPLING
@@ -353,7 +359,7 @@ static ShadeKernel sKernels[] =
     skEmissiveSimple,
     skRefractive
 };
-#else BASIC_BSDF_SAMPLING
+#else ONLY_BSDF_SAMPLING
 static ShadeKernel sKernels[] =
 {
     skDiffuseSimple,
