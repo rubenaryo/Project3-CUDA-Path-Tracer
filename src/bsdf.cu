@@ -75,11 +75,27 @@ inline __device__ glm::vec3 f_diffuse(const glm::vec3& albedo)
     return albedo * INV_PI;
 }
 
+inline __device__ glm::vec3 f_spec(const glm::vec3& albedo, const glm::vec3& wiW, const glm::vec3& norW)
+{
+    float absCosTheta = glm::abs(glm::dot(wiW, norW));
+    if (absCosTheta < FLT_EPSILON)
+        return glm::vec3(0.0f);
+
+    return albedo / absCosTheta;
+}
+
 inline __device__ glm::vec3 Sample_f_diffuse(const glm::vec3& albedo, const glm::vec3& norW, thrust::default_random_engine& rng, glm::vec3& out_wiW, float& out_pdf)
 {
     out_wiW = calculateRandomDirectionInHemisphere(norW, rng);
     out_pdf = glm::abs(glm::dot(out_wiW, norW)) * INV_PI;
     return f_diffuse(albedo);
+}
+
+inline __device__ glm::vec3 Sample_f_specular(const glm::vec3& albedo, const glm::vec3& woW, const glm::vec3& norW, glm::vec3& out_wiW, float& out_pdf)
+{
+    out_wiW = glm::reflect(woW, norW);
+    out_pdf = 1.0f;
+    return f_spec(albedo, out_wiW, norW);
 }
 
 __device__ bool SolveDirectLighting(const SceneData& sd, ShadeableIntersection isect, glm::vec3 view_point, thrust::default_random_engine& rng, glm::vec3& out_radiance, glm::vec3& out_wiW, float& out_pdf)
@@ -196,9 +212,17 @@ __global__ void skSpecular(ShadeKernelArgs args)
 
     HANDLE_MISS(idx, intersection, pathSegments);
 
-    glm::vec3 wiW = glm::reflect(path.ray.direction, intersection.surfaceNormal);
+    glm::vec3 view_point = path.ray.origin + intersection.t * path.ray.direction;
+    glm::vec3 wiW_bsdf;
+    float pdf_bsdf; // for spec materials, this should be 1.0
+    glm::vec3 bsdf = Sample_f_specular(material.color, path.ray.direction, intersection.surfaceNormal, wiW_bsdf, pdf_bsdf);
+
+    // Spec bounces don't need to do direct light calculation, since they only reflect light in one direction.
+
     args.pathSegments[idx].throughput *= material.color;
-    args.pathSegments[idx].ray = SpawnRay(path.ray.origin + intersection.t*path.ray.direction, wiW);
+    args.pathSegments[idx].ray = SpawnRay(view_point, wiW_bsdf);
+    args.pathSegments[idx].prevBounceSample.pdf = pdf_bsdf;
+    args.pathSegments[idx].prevBounceSample.matType = MT_SPECULAR;
     args.pathSegments[idx].remainingBounces--;
 }
 
@@ -218,9 +242,9 @@ __global__ void skEmissive(ShadeKernelArgs args)
     
     glm::vec3 totalRadiance(0.0f);
     glm::vec3 throughput = args.pathSegments[idx].throughput;
-    if (args.depth == 0) // If this is the first bounce, there is no "previous" data to go off
+    if (args.depth == 0 || path.prevBounceSample.matType == MT_SPECULAR) // If this is the first bounce or we just came from specular, there is no "previous" data to go off
     {
-        totalRadiance = material.color * material.emittance;
+        totalRadiance = material.color * material.emittance * throughput;
     }
     else
     {
@@ -275,6 +299,25 @@ __global__ void skDiffuseSimple(ShadeKernelArgs args)
     args.pathSegments[idx].ray = SpawnRay(path.ray.origin + intersection.t * path.ray.direction, wi);
     args.pathSegments[idx].remainingBounces--;
 }
+
+__global__ void skSpecularSimple(ShadeKernelArgs args)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= args.num_paths)
+        return;
+
+    const PathSegment path = args.pathSegments[idx];
+    const ShadeableIntersection intersection = args.shadeableIntersections[idx];
+    const Material material = args.materials[GetMaterialIDFromSortKey(intersection.matSortKey)];
+
+    HANDLE_MISS(idx, intersection, pathSegments);
+
+    glm::vec3 wiW = glm::reflect(path.ray.direction, intersection.surfaceNormal);
+    args.pathSegments[idx].throughput *= material.color;
+    args.pathSegments[idx].ray = SpawnRay(path.ray.origin + intersection.t * path.ray.direction, wiW);
+    args.pathSegments[idx].remainingBounces--;
+}
+
 #endif
 
 #if DIRECT_SAMPLING
