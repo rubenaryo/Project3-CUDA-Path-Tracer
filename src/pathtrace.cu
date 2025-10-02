@@ -88,6 +88,7 @@ static PathSegment* dev_paths = NULL;
 static ShadeableIntersection* dev_intersections = NULL;
 static MaterialSortKey* dev_sortKeys = NULL;  // Parallel array of flags to mark material type.
 static cudaTextureObject_t* dev_textureObjs = NULL;
+static cudaTextureObject_t* dev_envMapObjs = NULL;
 
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
@@ -100,54 +101,65 @@ void InitDataContainer(GuiDataContainer* imGuiData)
     guiData = imGuiData;
 }
 
+__host__ bool AllocDeviceTexture(HostTextureHandle& h, bool envMap)
+{
+    if (h.texObj)
+    {
+        return true; // Texture is already loaded. Return true
+    }
+
+    // Load on host side
+    int channels;
+    void* h_data = stbi_load(h.filePath.c_str(), &h.width, &h.height, &channels, 4);
+
+    if (!h_data) {
+        printf("Failed to load texture: %s\n", h.filePath.c_str());
+        return false; // Texture failed to load.
+    }
+
+    cudaChannelFormatDesc channelDesc = envMap ? cudaCreateChannelDesc<float4>() : cudaCreateChannelDesc<uchar4>();
+    cudaMallocArray(&h.cudaArr, &channelDesc, h.width, h.height);
+
+    // Copy to CUDA
+    size_t pitch = h.width * 4;
+    pitch *= envMap ? sizeof(float) : sizeof(unsigned char);
+
+    cudaMemcpy2DToArray(h.cudaArr, 0, 0, h_data,
+        pitch,
+        pitch,
+        h.height,
+        cudaMemcpyHostToDevice);
+
+    cudaResourceDesc resDesc = {};
+    resDesc.resType = cudaResourceTypeArray;
+    resDesc.res.array.array = h.cudaArr;
+
+    cudaTextureDesc texDesc = {};
+    texDesc.addressMode[0] = cudaAddressModeWrap;
+    texDesc.addressMode[1] = envMap ? cudaAddressModeClamp : cudaAddressModeWrap;
+    texDesc.filterMode = cudaFilterModeLinear;
+    texDesc.readMode = envMap ? cudaReadModeElementType : cudaReadModeNormalizedFloat;
+    texDesc.normalizedCoords = 1;
+
+    // Hold tex obj handle on host
+    cudaCreateTextureObject(&h.texObj, &resDesc, &texDesc, nullptr);
+
+    // Free host alloc
+    stbi_image_free(h_data);
+    return true;
+}
+
 void initDeviceTextures()
 {
     std::vector<cudaTextureObject_t> tempHostArr;
     tempHostArr.reserve(hst_scene->textures.size());
     for (HostTextureHandle& h : hst_scene->textures)
     {
-        if (h.texObj)
+        if (AllocDeviceTexture(h, false))
         {
+            assert(h.texObj != 0);
             tempHostArr.push_back(h.texObj);
-            continue; // Texture is already loaded
         }
-
-        // Load on host side
-        int channels;
-        unsigned char* h_data = stbi_load(h.filePath.c_str(), &h.width, &h.height,
-            &channels, 4); // Force RGBA
-        if (!h_data) {
-            printf("Failed to load texture: %s\n", h.filePath.c_str());
-            continue;
-        }
-
-        cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<uchar4>();
-        cudaMallocArray(&h.cudaArr, &channelDesc, h.width, h.height);
-
-        // Copy to CUDA
-        cudaMemcpy2DToArray(h.cudaArr, 0, 0, h_data,
-            h.width * 4 * sizeof(unsigned char),
-            h.width * 4 * sizeof(unsigned char),
-            h.height,
-            cudaMemcpyHostToDevice);
-
-        cudaResourceDesc resDesc = {};
-        resDesc.resType = cudaResourceTypeArray;
-        resDesc.res.array.array = h.cudaArr;
-
-        cudaTextureDesc texDesc = {};
-        texDesc.addressMode[0] = cudaAddressModeWrap;
-        texDesc.addressMode[1] = cudaAddressModeWrap;
-        texDesc.filterMode = cudaFilterModeLinear;
-        texDesc.readMode = cudaReadModeNormalizedFloat;
-        texDesc.normalizedCoords = 1;
-
-        // Hold tex obj handle on host
-        cudaCreateTextureObject(&h.texObj, &resDesc, &texDesc, nullptr);
-        tempHostArr.push_back(h.texObj);
-
-        // Free host alloc
-        stbi_image_free(h_data);
     }
 
     cudaMalloc(&dev_textureObjs, hst_scene->textures.size() * sizeof(cudaTextureObject_t));

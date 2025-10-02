@@ -20,6 +20,8 @@ public:
     std::vector<Mesh> deviceMeshes;
     std::vector<BVHNode> bvhNodes;
     std::vector<HostTextureHandle> textures;
+    HostTextureHandle envMapHandle;
+
     RenderState state;
 };
 

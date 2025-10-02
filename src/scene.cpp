@@ -78,6 +78,26 @@ void Scene::loadFromJSON(const std::string& jsonName)
     json data = json::parse(f);
     const auto& materialsData = data["Materials"];
     std::unordered_map<std::string, uint32_t> MatNameToID;
+
+    auto itFindEnv = data.find("Environment");
+    if (itFindEnv != data.end())
+    {
+        std::string relPath = itFindEnv.value();
+        std::filesystem::path filePath(relPath);
+        std::string absoluteStr = std::filesystem::absolute(filePath).string();
+        std::filesystem::path absolutePath(relPath);
+
+        if (std::filesystem::exists(absolutePath))
+        {
+            // The env map exists. hold onto the absolute path for later.
+            envMapHandle.filePath = std::move(absoluteStr);
+        }
+        else
+        {
+            printf("Error: Environment map path does not exist for %s!\n", absoluteStr.c_str());
+        }
+    }
+
     for (const auto& item : materialsData.items())
     {
         const auto& name = item.key();
