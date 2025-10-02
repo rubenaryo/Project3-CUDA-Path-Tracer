@@ -191,7 +191,6 @@ __global__ void skDiffuse(ShadeKernelArgs args)
     {
         float bsdf_pdf = Pdf(material.type, intersection.surfaceNormal, -path.ray.direction, wiW_Li);
         float lambert_Li = glm::abs(glm::dot(intersection.surfaceNormal, wiW_Li));
-        glm::vec3 matBsdf = f_diffuse(material.color); // TODO: Support diff materials?
 
         // Assemble direct lighting components
         glm::vec3 directLightResult = args.pathSegments[idx].throughput * directRadiance * lambert_Li / pdf_Li;
