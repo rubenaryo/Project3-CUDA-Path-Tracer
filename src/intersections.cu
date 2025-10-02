@@ -2,6 +2,7 @@
 
 #include "bvh.h"
 #include "light.h"
+#include "utilities.h"
 
 /// Kernel to label each intersection with additional information to be used for ray sorting and discarding
 __global__ void generateSortKeys(int N, const ShadeableIntersection* isects, Material* mats, MaterialSortKey* sortKeys)
@@ -381,7 +382,21 @@ __host__ __device__  float meshIntersectionTest(Geom meshGeom, const SceneData& 
     return -1.0f;
 }
 
-__device__ void sceneIntersect(PathSegment& path, const SceneData& sceneData, ShadeableIntersection& result, int ignoreGeomId)
+__device__ glm::vec3 sampleEnvironmentMap(cudaTextureObject_t envMap, const glm::vec3& direction) {
+    glm::vec3 dir = glm::normalize(direction);
+
+    // Convert direction to lat-long UV
+    float phi = atan2f(dir.z, dir.x);
+    float theta = acosf(glm::clamp(dir.y, -1.0f, 1.0f));
+
+    float u = (phi + PI) / (2.0f * PI);
+    float v = theta / PI;
+    
+    float4 color = tex2D<float4>(envMap, u, v);
+    return glm::vec3(color.x, color.y, color.z);
+}
+
+__device__ void sceneIntersect(PathSegment& path, const SceneData& sceneData, ShadeableIntersection& result, cudaTextureObject_t* envMaps, int ignoreGeomId)
 {
     float t;
     glm::vec3 intersect_point;
@@ -446,7 +461,17 @@ __device__ void sceneIntersect(PathSegment& path, const SceneData& sceneData, Sh
     if (hit_geom_index == -1)
     {
         result.t = -1.0f;
-        path.throughput = glm::vec3(0.0f); // This gmem read might be really bad.
+        //path.throughput = glm::vec3(0.0f); // This gmem read might be really bad.
+        if (envMaps)
+        {
+            path.throughput *= sampleEnvironmentMap(envMaps[0], pathCopy.ray.direction);
+            path.Lo += path.throughput;
+        }
+        else
+        {
+            path.throughput *= glm::vec3(0.0f);
+            //path.Lo += path.throughput;
+        }
     }
     else
     {

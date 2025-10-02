@@ -31,6 +31,7 @@ struct ShadeKernelArgs
     PathSegment* pathSegments;
     Material* materials;
     cudaTextureObject_t* textures;
+    cudaTextureObject_t* envMaps;
     SceneData sceneData;
 };
 

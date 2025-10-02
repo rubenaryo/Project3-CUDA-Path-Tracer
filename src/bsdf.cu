@@ -124,7 +124,7 @@ __device__ bool SolveDirectLighting(const SceneData& sd, ShadeableIntersection i
     PathSegment shadowPath;
     shadowPath.ray = SpawnRay(view_point, wiW_Li);
     ShadeableIntersection shadowTestResult;
-    sceneIntersect(shadowPath, sd, shadowTestResult, chosenLight.geomId);
+    sceneIntersect(shadowPath, sd, shadowTestResult, nullptr, chosenLight.geomId);
     
     if (shadowTestResult.t >= 0.0f && shadowTestResult.t < (distToLight - FLT_EPSILON))
         return false;

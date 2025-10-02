@@ -287,7 +287,9 @@ __global__ void computeIntersections(
     int num_paths,
     PathSegment* pathSegments,
     const SceneData sceneData,
-    ShadeableIntersection* intersections)
+    ShadeableIntersection* intersections,
+    cudaTextureObject_t* envMaps // Maybe temp
+    )
 {
     int path_index = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -296,7 +298,7 @@ __global__ void computeIntersections(
     
     PathSegment& path = pathSegments[path_index];
     ShadeableIntersection& result = intersections[path_index];
-    sceneIntersect(path, sceneData, result);
+    sceneIntersect(path, sceneData, result, envMaps);
 }
 
 // Add the current iteration's output to the overall image
@@ -388,6 +390,7 @@ __host__ void shadeByMaterialType(int num_paths, int iter, int depth, const Scen
     skArgs.depth = depth;
     skArgs.materials = dev_materials;
     skArgs.textures = dev_textureObjs;
+    skArgs.envMaps = dev_envMapObjs;
     skArgs.sceneData = sd;
 
     void* cudaKernelArgs[] = { &skArgs };
@@ -496,7 +499,8 @@ void pathtrace(uchar4* pbo, int frame, int iter)
             num_paths,
             dev_paths,
             sd,
-            dev_intersections
+            dev_intersections, 
+            dev_envMapObjs
         );
         checkCUDAError("trace one bounce");
         cudaDeviceSynchronize();
