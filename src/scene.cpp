@@ -98,6 +98,34 @@ void Scene::loadFromJSON(const std::string& jsonName)
             newMaterial.color = glm::vec3(col[0], col[1], col[2]);
             newMaterial.type = MT_SPECULAR;
         }
+
+        auto TryLoadAssignTexture = [p](const char* attrName, std::vector<std::string>& out_FileArr, int& out_id)
+        {
+            if (p.find(attrName) != p.end())
+            {
+                std::string relPath = p[attrName];
+                std::filesystem::path filePath(relPath);
+                std::string absoluteStr = std::filesystem::absolute(filePath).string();
+                std::filesystem::path absolutePath(relPath);
+
+                if (!std::filesystem::exists(absolutePath))
+                {
+                    printf("Path does not exist for %s!\n", absoluteStr.c_str());
+                    return false; // We needed this, but it doesn't exist.
+                }
+
+                out_id = out_FileArr.size();
+                out_FileArr.push_back(absoluteStr);
+            }
+            return true; // We either don't need it, or do and it exists.
+        };
+
+        if (!TryLoadAssignTexture("DIFFUSE_MAP", textureFiles, newMaterial.diffuseTexId))
+            continue;
+
+        if (!TryLoadAssignTexture("NORMAL_MAP", textureFiles, newMaterial.diffuseTexId))
+            continue;
+
         MatNameToID[name] = materials.size();
         materials.emplace_back(newMaterial);
     }
@@ -163,7 +191,7 @@ void Scene::loadFromJSON(const std::string& jsonName)
             Mesh& mesh = meshes.at(meshId);
             bool bvhSuccess = BuildBVH(mesh, bvhNodes);
             if (!bvhSuccess)
-                printf("BuildBVH failure for %s!", std::string(relPath).c_str());
+                printf("BuildBVH failure for %s!\n", std::string(relPath).c_str());
 
             newGeom.meshId = meshId;
         }

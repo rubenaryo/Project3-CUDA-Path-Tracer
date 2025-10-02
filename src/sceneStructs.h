@@ -226,6 +226,8 @@ struct Material
     float indexOfRefraction;
     float emittance;
 
+    int diffuseTexId = -1;
+    int normalTexId = -1;
 };
 
 struct BSDFSample
