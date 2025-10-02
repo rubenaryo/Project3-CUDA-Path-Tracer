@@ -1,4 +1,5 @@
 {
+	"Environment":"../scenes/meshes/Fox/Texture.png",
     "Materials":
     {
         "light":
