@@ -99,7 +99,7 @@
         },
 		{
             "TYPE":"mesh",
-            "MATERIAL":"diffuse_white",
+            "MATERIAL":"fox",
             "TRANS":[2.0,0.01,1.0],
             "ROTAT":[0.0,-45.0,0.0],
             "SCALE":[0.06, 0.06, 0.06],

@@ -40,6 +40,12 @@ inline __device__ Ray SpawnRay(const glm::vec3& pos, const glm::vec3& wi)
     return r;
 }
 
+inline __device__ glm::vec4 TextureSample(cudaTextureObject_t texObj, const glm::vec2& uv)
+{
+    float4 color = tex2D<float4>(texObj, uv.x, uv.y);
+    return glm::vec4(color.x, color.y, color.z, color.w);
+}
+
 ////////////////////////
 // PDF functions
 
@@ -144,6 +150,7 @@ __device__ bool SolveDirectLighting(const SceneData& sd, ShadeableIntersection i
         }
 #endif
 
+
 __global__ void skDiffuse(ShadeKernelArgs args)
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -160,12 +167,27 @@ __global__ void skDiffuse(ShadeKernelArgs args)
     glm::vec3 view_point = path.ray.origin + intersection.t * path.ray.direction;
     glm::vec3 thisBounceRadiance(0.0f); // Comes from direct lighting only
     
+    const glm::vec3 ERROR_COLOR(1.0f, 0.4118f, 0.7059f);
     glm::vec3 wiW_bsdf;
     float pdf_bsdf;
     glm::vec3 bsdf;
+
+    glm::vec3 albedo;
+    if (material.diffuseTexId != -1)
+    {
+        cudaTextureObject_t texObj = args.textures[material.diffuseTexId];
+        if (!texObj)
+            albedo = ERROR_COLOR;
+        else
+            albedo = glm::vec3(TextureSample(texObj, intersection.uv));
+    }
+    else
+    {
+        albedo = material.color;
+    }
     
     // BSDF Sampling
-    bsdf = Sample_f_diffuse(material.color, intersection.surfaceNormal, rng, wiW_bsdf, pdf_bsdf);
+    bsdf = Sample_f_diffuse(albedo, intersection.surfaceNormal, rng, wiW_bsdf, pdf_bsdf);
     if (pdf_bsdf < FLT_EPSILON)
     {
         // Something went wrong, terminate

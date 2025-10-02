@@ -30,6 +30,7 @@ struct ShadeKernelArgs
     ShadeableIntersection* shadeableIntersections;
     PathSegment* pathSegments;
     Material* materials;
+    cudaTextureObject_t* textures;
     SceneData sceneData;
 };
 

@@ -31,7 +31,27 @@ __device__ float getRectArea(const glm::mat4& rectTfm)
     return glm::length(glm::cross(edge1, edge2));
 }
 
-__host__ __device__ float intersectRectangle(const Geom& geom, const Ray& ray, glm::vec3& out_isectPoint, glm::vec3& out_normal)
+__host__ __device__ float intersectAABB(const Ray& ray, const AABB& aabb)
+{
+    glm::vec3 invDir = 1.0f / ray.direction;
+
+    // Intersect with each axis aligned slab
+    glm::vec3 t0 = (aabb.min - ray.origin) * invDir;
+    glm::vec3 t1 = (aabb.max - ray.origin) * invDir;
+
+    // Find the closest one
+    glm::vec3 tNear = glm::min(t0, t1);
+    glm::vec3 tFar = glm::max(t0, t1);
+
+    // Within that find the largest intersection t
+    float tMin = fmaxf(fmaxf(tNear.x, tNear.y), tNear.z);
+    float tMax = fminf(fminf(tFar.x, tFar.y), tFar.z);
+
+    bool hit = tMax >= tMin && tMax >= 0.0f;
+    return hit ? tMin : FLT_MAX;
+}
+
+__host__ __device__ float rectIntersectionTest(const Geom& geom, const Ray& ray, glm::vec3& out_isectPoint, glm::vec3& out_normal, glm::vec2& out_uv)
 {
     glm::vec3 ro = glm::vec3(geom.inverseTransform * glm::vec4(ray.origin, 1.0f));
     glm::vec3 rd = glm::vec3(geom.inverseTransform * glm::vec4(ray.direction, 0.0f));
@@ -55,6 +75,8 @@ __host__ __device__ float intersectRectangle(const Geom& geom, const Ray& ray, g
         
         // Transform back to world space
         out_isectPoint = glm::vec3(geom.transform * glm::vec4(objPoint, 1.0f));
+
+        out_uv = glm::vec2(objPoint.x + 0.5f, objPoint.y + 0.5f);
 
         // Transform normal to world space
         glm::vec3 objNormal = rd.z < 0.0f ? glm::vec3(0.0f, 0.0f, 1.0f)
@@ -123,26 +145,6 @@ __host__ __device__ float boxIntersectionTest(
     }
 
     return -1;
-}
-
-__host__ __device__ float intersectAABB(const Ray& ray, const AABB& aabb)
-{
-    glm::vec3 invDir = 1.0f / ray.direction;
-
-    // Intersect with each axis aligned slab
-    glm::vec3 t0 = (aabb.min - ray.origin) * invDir;
-    glm::vec3 t1 = (aabb.max - ray.origin) * invDir;
-
-    // Find the closest one
-    glm::vec3 tNear = glm::min(t0, t1);
-    glm::vec3 tFar = glm::max(t0, t1);
-
-    // Within that find the largest intersection t
-    float tMin = fmaxf(fmaxf(tNear.x, tNear.y), tNear.z);
-    float tMax = fminf(fminf(tFar.x, tFar.y), tFar.z);
-
-    bool hit = tMax >= tMin && tMax >= 0.0f;
-    return hit ? tMin : FLT_MAX;
 }
 
 __host__ __device__ float sphereIntersectionTest(
@@ -366,10 +368,12 @@ __host__ __device__  float meshIntersectionTest(Geom meshGeom, const SceneData& 
         float v = isectResult.uv.y;
         float w = 1.0f - u - v;
         
+        uint32_t vertIdx = isectResult.triIdx * 3;
+
         // Barycentric interp to get uv coords
-        uv = w * mesh.uvs[isectResult.triIdx] +
-             u * mesh.uvs[isectResult.triIdx + 1] +
-             v * mesh.uvs[isectResult.triIdx + 2];
+        uv = w * mesh.uvs[vertIdx] +
+             u * mesh.uvs[vertIdx + 1] +
+             v * mesh.uvs[vertIdx + 2];
 
         return glm::length(r.origin - intersectionPoint);
     }
@@ -382,6 +386,7 @@ __device__ void sceneIntersect(PathSegment& path, const SceneData& sceneData, Sh
     float t;
     glm::vec3 intersect_point;
     glm::vec3 normal;
+    glm::vec2 uv;
     float t_min = FLT_MAX;
     int hit_geom_index = -1;
     GeomType hit_geom_type = GT_INVALID;
@@ -390,7 +395,7 @@ __device__ void sceneIntersect(PathSegment& path, const SceneData& sceneData, Sh
 
     glm::vec3 tmp_intersect;
     glm::vec3 tmp_normal;
-    
+    glm::vec2 tmp_uv(-1.0f); // some isect functions don't support UV
     glm::vec3 ToLight_Local; // TODO: This works for rect only right now
 
     const PathSegment pathCopy = path;
@@ -407,20 +412,21 @@ __device__ void sceneIntersect(PathSegment& path, const SceneData& sceneData, Sh
         if (geom.type == GT_CUBE)
         {
             t = boxIntersectionTest(geom, pathCopy.ray, tmp_intersect, tmp_normal, outside);
+            tmp_uv = glm::vec2(-1.0f);
         }
         else if (geom.type == GT_SPHERE)
         {
             t = sphereIntersectionTest(geom, pathCopy.ray, tmp_intersect, tmp_normal, outside);
+            tmp_uv = glm::vec2(-1.0f);
         }
         else if (geom.type == GT_MESH)
         {
             const Mesh mesh = sceneData.meshes[geom.meshId];
-            glm::vec2 uv;
-            t = meshIntersectionTest(geom, sceneData, pathCopy.ray, tmp_intersect, tmp_normal, uv, outside);
+            t = meshIntersectionTest(geom, sceneData, pathCopy.ray, tmp_intersect, tmp_normal, tmp_uv, outside);
         }
         else if (geom.type == GT_RECT)
         {
-            t = intersectRectangle(geom, pathCopy.ray, tmp_intersect, tmp_normal);
+            t = rectIntersectionTest(geom, pathCopy.ray, tmp_intersect, tmp_normal, tmp_uv);
         }
 
         // Compute the minimum t from the intersection tests to determine what
@@ -433,6 +439,7 @@ __device__ void sceneIntersect(PathSegment& path, const SceneData& sceneData, Sh
             hit_geom_type = geom.type;
             intersect_point = tmp_intersect;
             normal = tmp_normal;
+            uv = tmp_uv;
         }
     }
 
@@ -456,6 +463,7 @@ __device__ void sceneIntersect(PathSegment& path, const SceneData& sceneData, Sh
         result.t = t_min;
         result.matSortKey = hitMaterialKey;
         result.surfaceNormal = normal;
+        result.uv = uv;
         result.hitGeomIdx = hit_geom_index; // TODO: evaluate whether this is necessary (maybe just copy the geom transform?)
     }
 }

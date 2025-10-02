@@ -24,6 +24,7 @@ __global__ void generateSortKeys(int N, const ShadeableIntersection* isects, Mat
 
 __device__ float getRectArea(const glm::mat4& rectTfm);
 
+
 // CHECKITOUT
 /**
  * Compute a point at parameter value `t` on ray `r`.
@@ -42,72 +43,14 @@ __host__ __device__ inline glm::vec3 multiplyMV(glm::mat4 m, glm::vec4 v)
     return glm::vec3(m * v);
 }
 
-__host__ __device__ float rectIntersectionTest(const glm::vec3& posW, const glm::vec3& norW, float radiusU, float radiusV, Ray rayWorld, const glm::mat4& invTfm, glm::vec3& out_localPos, glm::vec2& out_uv);
-
-// CHECKITOUT
-/**
- * Test intersection between a ray and a transformed cube. Untransformed,
- * the cube ranges from -0.5 to 0.5 in each axis and is centered at the origin.
- *
- * @param intersectionPoint  Output parameter for point of intersection.
- * @param normal             Output parameter for surface normal.
- * @param outside            Output param for whether the ray came from outside.
- * @return                   Ray parameter `t` value. -1 if no intersection.
- */
-__host__ __device__ float boxIntersectionTest(
-    Geom box,
-    Ray r,
-    glm::vec3& intersectionPoint,
-    glm::vec3& normal,
-    bool& outside);
-
 // Isect between an arbitrary ray and an AABB (for BVH)
 __host__ __device__ float intersectAABB(const Ray& ray, const AABB& aabb);
 
-// CHECKITOUT
-/**
- * Test intersection between a ray and a transformed sphere. Untransformed,
- * the sphere always has radius 0.5 and is centered at the origin.
- *
- * @param intersectionPoint  Output parameter for point of intersection.
- * @param normal             Output parameter for surface normal.
- * @param outside            Output param for whether the ray came from outside.
- * @return                   Ray parameter `t` value. -1 if no intersection.
- */
-__host__ __device__ float sphereIntersectionTest(
-    Geom sphere,
-    Ray r,
-    glm::vec3& intersectionPoint,
-    glm::vec3& normal,
-    bool& outside);
+__host__ __device__ float rectIntersectionTest(const Geom& geom, const Ray& ray, glm::vec3& out_isectPoint, glm::vec3& out_normal, glm::vec2& out_uv);
+__host__ __device__ float boxIntersectionTest(Geom box, Ray r, glm::vec3& intersectionPoint, glm::vec3& normal, bool& outside);
+__host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r, glm::vec3& intersectionPoint, glm::vec3& normal, bool& outside);
+__host__ __device__ float triangleIntersectionTest(Geom tri, Ray r, glm::vec3& intersectionPoint, glm::vec3& normal, bool& outside);
+__host__ __device__ float meshIntersectionTest(Geom meshGeom, const SceneData& sd, Ray r, glm::vec3& intersectionPoint, glm::vec3& normal, glm::vec2& uv, bool& outside);
 
-__host__ __device__ float triangleIntersectionTest(
-    Geom tri,
-    Ray r,
-    glm::vec3& intersectionPoint,
-    glm::vec3& normal,
-    bool& outside);
-
-__host__ __device__ float meshIntersectionTest(
-    Geom meshGeom,
-    const SceneData& sd,
-    Ray r,
-    glm::vec3& intersectionPoint,
-    glm::vec3& normal,
-    glm::vec2& uv,
-    bool& outside);
-
-__device__ void sceneIntersect(
-    PathSegment& path,
-    const SceneData& sceneData,
-    ShadeableIntersection& result,
-    int ignoreGeomId = -1
-);
-
-__device__ void lightsIntersect(
-    PathSegment& path,
-    const Light* lights,
-    int lights_size,
-    ShadeableIntersection& result,
-    LightID& resultId
-);
+__device__ void sceneIntersect(PathSegment& path, const SceneData& sceneData, ShadeableIntersection& result, int ignoreGeomId = -1);
+__device__ void lightsIntersect(PathSegment& path, const Light* lights, int lights_size, ShadeableIntersection& result, LightID& resultId);

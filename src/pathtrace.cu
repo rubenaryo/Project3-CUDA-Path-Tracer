@@ -87,6 +87,7 @@ static BVHNode* dev_bvhNodes = NULL;
 static PathSegment* dev_paths = NULL;
 static ShadeableIntersection* dev_intersections = NULL;
 static MaterialSortKey* dev_sortKeys = NULL;  // Parallel array of flags to mark material type.
+static cudaTextureObject_t* dev_textureObjs = NULL;
 
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
@@ -101,10 +102,15 @@ void InitDataContainer(GuiDataContainer* imGuiData)
 
 void initDeviceTextures()
 {
+    std::vector<cudaTextureObject_t> tempHostArr;
+    tempHostArr.reserve(hst_scene->textures.size());
     for (HostTextureHandle& h : hst_scene->textures)
     {
         if (h.texObj)
+        {
+            tempHostArr.push_back(h.texObj);
             continue; // Texture is already loaded
+        }
 
         // Load on host side
         int channels;
@@ -138,10 +144,14 @@ void initDeviceTextures()
 
         // Hold tex obj handle on host
         cudaCreateTextureObject(&h.texObj, &resDesc, &texDesc, nullptr);
+        tempHostArr.push_back(h.texObj);
 
         // Free host alloc
         stbi_image_free(h_data);
     }
+
+    cudaMalloc(&dev_textureObjs, hst_scene->textures.size() * sizeof(cudaTextureObject_t));
+    cudaMemcpy(dev_textureObjs, tempHostArr.data(), tempHostArr.size() * sizeof(cudaTextureObject_t), cudaMemcpyHostToDevice);
 
     checkCUDAError("initDeviceTextures");
 }
@@ -195,6 +205,7 @@ void pathtraceFree()
     cudaFree(dev_bvhNodes);
     cudaFree(dev_intersections);
     cudaFree(dev_sortKeys);
+    cudaFree(dev_textureObjs);
 
     checkCUDAError("pathtraceFree");
 }
@@ -346,6 +357,7 @@ __host__ void shadeByMaterialType(int num_paths, int iter, int depth, const Scen
     skArgs.iter = iter;
     skArgs.depth = depth;
     skArgs.materials = dev_materials;
+    skArgs.textures = dev_textureObjs;
     skArgs.sceneData = sd;
 
     void* cudaKernelArgs[] = { &skArgs };

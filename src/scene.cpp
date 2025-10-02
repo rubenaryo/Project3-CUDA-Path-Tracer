@@ -129,7 +129,7 @@ void Scene::loadFromJSON(const std::string& jsonName)
         if (!TryLoadAssignTexture("DIFFUSE_MAP", textures, newMaterial.diffuseTexId))
             continue;
 
-        if (!TryLoadAssignTexture("NORMAL_MAP", textures, newMaterial.diffuseTexId))
+        if (!TryLoadAssignTexture("NORMAL_MAP", textures, newMaterial.normalTexId))
             continue;
 
         MatNameToID[name] = materials.size();

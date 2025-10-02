@@ -21,6 +21,22 @@ __host__ void GrowAABB(const glm::vec3* vertices, int vtx_count, AABB& aabb)
     aabb.centre = (aabb.min + aabb.max) * 0.5f;
 }
 
+template<typename T>
+void SwapTri(uint32_t iA, uint32_t iB, T* data)
+{
+    T t0 = data[iA+0];
+    T t1 = data[iA+1];
+    T t2 = data[iA+2];
+
+    data[iA+0] = data[iB+0];
+    data[iA+1] = data[iB+1];
+    data[iA+2] = data[iB+2];
+
+    data[iB+0] = t0;
+    data[iB+1] = t1;
+    data[iB+2] = t2;
+}
+
 #define MIN_TRIS_PER_LEAF 4
 static int maxDepthTest = -1;
 
@@ -70,14 +86,8 @@ __host__ void Split(uint32_t parentIdx, std::vector<BVHNode>& allNodes, Mesh& me
             int32_t swapTriIdx = childA.triIndex + childA.triCount - 1;
             int32_t swapVertIdx = swapTriIdx * 3;
 
-            // Swap tris to ensure data cohesion per node
-            mesh.vtx[vertIdx]   = mesh.vtx[swapVertIdx];
-            mesh.vtx[vertIdx+1] = mesh.vtx[swapVertIdx+1];
-            mesh.vtx[vertIdx+2] = mesh.vtx[swapVertIdx+2];
-
-            mesh.vtx[swapVertIdx]   = v0;
-            mesh.vtx[swapVertIdx+1] = v1;
-            mesh.vtx[swapVertIdx+2] = v2;
+            SwapTri<glm::vec3>(vertIdx, swapVertIdx, mesh.vtx);
+            SwapTri<glm::vec2>(vertIdx, swapVertIdx, mesh.uvs);
 
             childB.triIndex++; // Every time we add to childA, we move over the start of childB
         }
