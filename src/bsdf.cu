@@ -174,17 +174,16 @@ __global__ void skDiffuseDirect(ShadeKernelArgs args)
     glm::vec3 view_point = path.ray.origin + (intersection.t * path.ray.direction);
     glm::vec3 totalDirectLight(0.0f);
     glm::vec3 bsdf = f_diffuse(material.color);
-    const int NUM_SAMPLES = 4;
+    const int NUM_SAMPLES = 1;
     for (int s = 0; s != NUM_SAMPLES; ++s)
     {
         float distToLight;
         int randomLightIndex = iu0N(rng);
         const Light chosenLight = lights[randomLightIndex];
 
-        glm::vec3 liResult = Sample_Li(view_point, intersection.surfaceNormal, chosenLight, numLights, rng, wiW, psdf, distToLight);
-        if (pdf < FLT_EPSILON)
-            continue;
-
+        glm::vec3 liResult = Sample_Li(view_point, intersection.surfaceNormal, chosenLight, numLights, rng, wiW, pdf, distToLight);
+        //if (pdf < FLT_EPSILON)
+        //    continue;
         //PathSegment shadowPath;
         //shadowPath.ray = SpawnRay(view_point, wiW);
         //ShadeableIntersection shadowTestResult;
@@ -193,14 +192,18 @@ __global__ void skDiffuseDirect(ShadeKernelArgs args)
         //if (shadowTestResult.t >= 0.0f && shadowTestResult.t < (distToLight - FLT_EPSILON))
         //    continue;
 
-        float cosTheta = (glm::dot(wiW, intersection.surfaceNormal));
-        if (cosTheta < FLT_EPSILON)
-            continue;
+        float cosTheta = fmaxf(glm::dot(wiW, intersection.surfaceNormal), 0.0f);
+        //if (cosTheta < FLT_EPSILON)
+        //    continue;
 
-        totalDirectLight += bsdf * liResult * cosTheta / (NUM_SAMPLES * pdf);
+        //
+        totalDirectLight += chosenLight.color * chosenLight.emittance * cosTheta / (NUM_SAMPLES * pdf);
+        //totalDirectLight = glm::vec3(1.0);
     }
-    
-    args.pathSegments[idx].throughput *= totalDirectLight;
+    totalDirectLight *= numLights;
+
+    args.pathSegments[idx].throughput *= bsdf;
+    args.pathSegments[idx].Lo += totalDirectLight;
     args.pathSegments[idx].remainingBounces = 0;
 }
 

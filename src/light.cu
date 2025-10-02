@@ -142,7 +142,7 @@ __device__ glm::vec3 DirectSampleAreaLight(glm::vec3 view_point, glm::vec3 view_
             out_wiW = toLightW;
             out_pdf = distToLightSq / (cosTheta * surfaceArea);
 
-            return cosTheta * numLights * chosenLight.emittance * chosenLight.color;
+            return numLights * chosenLight.emittance * chosenLight.color;
         }
         break;
     default:

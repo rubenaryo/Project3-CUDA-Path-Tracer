@@ -181,6 +181,7 @@ void Scene::loadFromJSON(const std::string& jsonName)
             newLight.rotation = newGeom.rotation;
             newLight.scale = newGeom.scale;
 
+            newLight.geomType = newGeom.type;
             newLight.lightType = LT_AREA;
             lights.push_back(newLight);
         }
