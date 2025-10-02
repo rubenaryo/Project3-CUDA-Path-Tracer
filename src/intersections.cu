@@ -31,52 +31,6 @@ __device__ float getRectArea(const glm::mat4& rectTfm)
     return glm::length(glm::cross(edge1, edge2));
 }
 
-// From CIS 561
-__host__ __device__ float rectIntersectionTest(const glm::vec3& posW, const glm::vec3& norW,
-    float radiusU, float radiusV,
-    Ray rayWorld, const glm::mat4& invTfm,
-    glm::vec3& out_toLightLocal, glm::vec2& out_uv
-)
-{
-    using namespace glm;
-
-    Ray rayLocal;
-    rayLocal.origin = multiplyMV(invTfm, glm::vec4(rayWorld.origin, 1.0f));
-    rayLocal.direction = multiplyMV(invTfm, glm::vec4(rayWorld.direction, 0.0f));
-
-    float dt = glm::dot(-norW, rayLocal.direction);
-    if (dt < 0.0f) return FLT_MAX;
-    
-    float t = glm::dot(-norW, posW - rayLocal.origin) / dt;
-    if (t < 0.0f) return FLT_MAX;
-
-    vec3 hit = rayLocal.origin + rayLocal.direction * t;
-    vec3 vi = hit - posW;
-
-    vec3 U = normalize(cross(abs(norW.y) < 0.9 ? vec3(0, 1, 0) : vec3(1, 0, 0), norW));
-    vec3 V = cross(norW, U);
-
-    out_toLightLocal = hit - rayLocal.origin;
-    out_uv = vec2(dot(U, vi) / length(U), dot(V, vi) / length(V));
-    out_uv = out_uv + vec2(0.5, 0.5);
-    
-    return (abs(dot(U, vi)) > radiusU || abs(dot(V, vi)) > radiusV) ? FLT_MAX : t;
-}
-
-
-
-__host__ __device__ float rectIntersectionTest(Geom rect, const glm::vec3& posW, const glm::vec3& norW,
-    Ray rayWorld,
-    glm::vec3& out_toLightLocal, glm::vec2& out_uv
-)
-{
-    glm::mat4 invTfm = rect.inverseTransform;
-    float radiusU = rect.scale.x;
-    float radiusV = rect.scale.z;
-
-    return rectIntersectionTest(posW, norW, radiusU, radiusV, rayWorld, invTfm, out_toLightLocal, out_uv);
-}
-
 __host__ __device__ float intersectRectangle(const Geom& geom, const Ray& ray, glm::vec3& out_isectPoint, glm::vec3& out_normal)
 {
     glm::vec3 ro = glm::vec3(geom.inverseTransform * glm::vec4(ray.origin, 1.0f));

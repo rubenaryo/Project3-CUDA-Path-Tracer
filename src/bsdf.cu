@@ -195,9 +195,7 @@ __global__ void skDiffuseDirect(ShadeKernelArgs args)
         if (cosTheta < FLT_EPSILON)
             continue;
 
-        //
         totalDirectLight += chosenLight.color * chosenLight.emittance * cosTheta / (NUM_SAMPLES * pdf);
-        //totalDirectLight = glm::vec3(1.0);
     }
     totalDirectLight *= numLights;
 
@@ -229,20 +227,18 @@ __global__ void skDiffuse(ShadeKernelArgs args)
     glm::vec3 bsdf;
     
     // BSDF Sampling
+    bsdf = Sample_f_diffuse(material.color, intersection.surfaceNormal, rng, wiW_bsdf, pdf_bsdf);
+    if (pdf_bsdf < FLT_EPSILON)
     {
-        bsdf = Sample_f_diffuse(material.color, intersection.surfaceNormal, rng, wiW_bsdf, pdf_bsdf);
-
-        if (pdf_bsdf < FLT_EPSILON)
-        {
-            // Something went wrong, terminate
-            args.pathSegments[idx].remainingBounces = 0;
-            return;
-        }
+        // Something went wrong, terminate
+        args.pathSegments[idx].remainingBounces = 0;
+        return;
     }
 
     glm::vec3 directRadiance;
     glm::vec3 wiW_Li;
     float pdf_Li;
+
     // Direct Light Sampling
     if (SolveDirectLighting(args.sceneData, intersection, view_point, rng, directRadiance, wiW_Li, pdf_Li))
     {
@@ -262,8 +258,7 @@ __global__ void skDiffuse(ShadeKernelArgs args)
     args.pathSegments[idx].ray = SpawnRay(view_point, wiW_bsdf);
     args.pathSegments[idx].remainingBounces--;
 
-    // Key difference with MIS: Accumulate direct lighting radiance here.
-    //assert(glm::any(glm::isnan(thisBounceRadiance)) == false);
+    // Key difference using MIS: Accumulate direct lighting radiance here.
     args.pathSegments[idx].Lo += thisBounceRadiance;
 }
 

@@ -189,10 +189,6 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
     segment.remainingBounces = traceDepth;
 }
 
-// TODO:
-// computeIntersections handles generating ray intersections ONLY.
-// Generating new rays is handled in your shader(s).
-// Feel free to modify the code below.
 __global__ void computeIntersections(
     int depth,
     int num_paths,
