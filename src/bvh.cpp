@@ -21,6 +21,23 @@ __host__ void GrowAABB(const glm::vec3* vertices, int vtx_count, AABB& aabb)
     aabb.centre = (aabb.min + aabb.max) * 0.5f;
 }
 
+__host__ void GrowAABBIndexed(const glm::uvec3* indices, const glm::vec3* vertices, int tri_count, int vtx_count, AABB& aabb)
+{
+    for (int t = 0; t < tri_count; ++t)
+    {
+        const glm::uvec3& tri = indices[t];
+
+        for (int i = 0; i != 3; ++i)
+        {
+            assert(tri[i] < vtx_count);
+            const glm::vec3& vtx = vertices[tri[i]];
+            aabb.max = glm::max(aabb.max, vtx);
+            aabb.min = glm::min(aabb.min, vtx);
+        }
+    }
+    aabb.centre = (aabb.min + aabb.max) * 0.5f;
+}
+
 template<typename T>
 void SwapTri(uint32_t iA, uint32_t iB, T* data)
 {
@@ -69,25 +86,28 @@ __host__ void Split(uint32_t parentIdx, std::vector<BVHNode>& allNodes, Mesh& me
     const uint32_t maxTriIdx = (uint32_t)parentTriIndex + parentTriCount;
     for (uint32_t triIdx = parentTriIndex; triIdx < maxTriIdx; ++triIdx)
     {
-        const uint32_t vertIdx = triIdx * 3;
-        const glm::vec3 v0 = mesh.vtx[vertIdx];
-        const glm::vec3 v1 = mesh.vtx[vertIdx+1];
-        const glm::vec3 v2 = mesh.vtx[vertIdx+2];
+        glm::uvec3 triIndices = mesh.idx[triIdx];
+        const glm::vec3 v0 = mesh.vtx[triIndices.x];
+        const glm::vec3 v1 = mesh.vtx[triIndices.y];
+        const glm::vec3 v2 = mesh.vtx[triIndices.z];
         const glm::vec3 centroid = GetTriCentroid(v0, v1, v2);
 
         bool isSideA = centroid[splitAxis] < splitPos;
         BVHNode& child = isSideA ? childA : childB;
-        GrowAABB(mesh.vtx + vertIdx, 3, child.bounds);
+        GrowAABBIndexed(&mesh.idx[triIdx], mesh.vtx, 1, mesh.vtx_count, child.bounds);
+        //GrowAABB(mesh.vtx + vertIdx, 3, child.bounds);
 
         child.triCount++;
 
         if (isSideA)
         {
             int32_t swapTriIdx = childA.triIndex + childA.triCount - 1;
-            int32_t swapVertIdx = swapTriIdx * 3;
-
-            SwapTri<glm::vec3>(vertIdx, swapVertIdx, mesh.vtx);
-            SwapTri<glm::vec2>(vertIdx, swapVertIdx, mesh.uvs);
+            
+            mesh.idx[triIdx] = mesh.idx[swapTriIdx];
+            mesh.idx[swapTriIdx] = triIndices;
+            
+            // SwapTri<glm::vec3>(vertIdx, swapVertIdx, mesh.vtx);
+            //SwapTri<glm::vec2>(vertIdx, swapVertIdx, mesh.uvs);
 
             childB.triIndex++; // Every time we add to childA, we move over the start of childB
         }
@@ -106,8 +126,8 @@ __host__ void Split(uint32_t parentIdx, std::vector<BVHNode>& allNodes, Mesh& me
 __host__ bool BuildBVH(Mesh& mesh, std::vector<BVHNode>& allNodes)
 {
     // For sanity, yell if the mesh has a weird number of verts
-    assert(mesh.vtx_count % 3 == 0);
-    uint32_t totalTriCount = mesh.vtx_count / 3;
+    //assert(mesh.vtx_count % 3 == 0);
+    uint32_t totalTriCount = mesh.tri_count;
 
     // Assume only one mesh in the collection for now.
     assert(allNodes.empty());
@@ -121,7 +141,8 @@ __host__ bool BuildBVH(Mesh& mesh, std::vector<BVHNode>& allNodes)
     allNodes[rootIdx].triIndex = 0;
 
     // Root node contains the whole mesh
-    GrowAABB(mesh.vtx, mesh.vtx_count, allNodes[rootIdx].bounds);
+    //GrowAABB(mesh.vtx, mesh.vtx_count, allNodes[rootIdx].bounds);
+    GrowAABBIndexed(mesh.idx, mesh.vtx, mesh.tri_count, mesh.vtx_count, allNodes[rootIdx].bounds);
 
     // Split the root at first
     int depth = 0;

@@ -347,6 +347,9 @@ __host__ int loadGLTF(const std::string& relPath, std::vector<Mesh>& meshes)
 
     for (const auto& mesh : model.meshes) {
         for (const auto& primitive : mesh.primitives) {
+
+            if (primitive.material > 1) continue; // TEMP: Only do the trophy and base for now
+
             // Load vertices
             std::vector<glm::vec3> vertices;
             if (primitive.attributes.find("POSITION") != primitive.attributes.end()) {

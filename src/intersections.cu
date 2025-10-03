@@ -281,7 +281,7 @@ __host__ __device__ bool testAllTrianglesForMesh(const Ray& r, uint32_t meshVtxI
     return hit;
 }
 
-__host__ __device__  bool bvhIntersectionTest(const Ray& r, uint32_t bvhRootIndex, const BVHNode* bvhNodes, const glm::vec3* vertices, BVHIntersectResult& isectResult)
+__host__ __device__  bool bvhIntersectionTest(const Ray& r, uint32_t bvhRootIndex, const BVHNode* bvhNodes, const glm::vec3* allVertices, const Mesh& mesh, BVHIntersectResult& isectResult)
 {
     uint32_t nodeStack[BVH_MAX_DEPTH];
     uint32_t stackIdx = 0;
@@ -303,7 +303,13 @@ __host__ __device__  bool bvhIntersectionTest(const Ray& r, uint32_t bvhRootInde
             const uint32_t maxTriIdx = node.triIndex + node.triCount;
             for (uint32_t triIdx = node.triIndex; triIdx < maxTriIdx; ++triIdx)
             {
-                const Triangle tri = GetTriangleFromTriIdx(triIdx, vertices);
+                //const Triangle tri = GetTriangleFromTriIdx(triIdx, vertices);
+                glm::uvec3 triIndices = mesh.idx[triIdx];
+                Triangle tri;
+                tri.v[0] = allVertices[triIndices.x];
+                tri.v[1] = allVertices[triIndices.y];
+                tri.v[2] = allVertices[triIndices.z];
+
                 if (intersectRayTriangle_MollerTrumbore(r, tri, tmpIsectResult) && 
                     tmpIsectResult.t < isectResult.t)
                 {
@@ -354,7 +360,7 @@ __host__ __device__  float meshIntersectionTest(Geom meshGeom, const SceneData& 
     BVHIntersectResult isectResult;
 
 #if USE_BVH
-    bool hit = bvhIntersectionTest(localRay, mesh.bvh_root_idx, bvhNodes, mesh.vtx, isectResult);
+    bool hit = bvhIntersectionTest(localRay, mesh.bvh_root_idx, bvhNodes, mesh.vtx, mesh, isectResult);
 #else
     bool hit = testAllTrianglesForMesh(localRay, 0, mesh.vtx, mesh.vtx_count, isectResult);
 #endif
