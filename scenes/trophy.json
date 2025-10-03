@@ -58,7 +58,7 @@
         {
             "TYPE":"rect",
             "MATERIAL":"light",
-            "TRANS":[0.0,7.9,3.0],
+            "TRANS":[0.0,9.9,5.0],
             "ROTAT":[-45.0,0.0,0.0],
             "SCALE":[3.0,3.0,1.0]
         },
@@ -78,10 +78,10 @@
         },
 		{
             "TYPE":"mesh",
-            "MATERIAL":["trophy", "trophy"],
-            "TRANS":[0.0,-3.1,0.0],
+            "MATERIAL":["trophy", "diffuse_green"],
+            "TRANS":[0.0,-5.55,0.0],
             "ROTAT":[0.0,0.0,0.0],
-            "SCALE":[0.2, 0.2, 0.2],
+            "SCALE":[0.35, 0.35, 0.35],
 			"PATH":"../scenes/meshes/Trophy/scene.gltf"
         }
     ]
