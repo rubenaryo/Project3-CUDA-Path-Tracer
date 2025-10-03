@@ -580,7 +580,7 @@ __global__ void skMicrofacetPBR(ShadeKernelArgs args)
     float roughness = glm::clamp(metallicRough.g, 0.001f, 1.0f);
 
     //metallic = 1.0f;
-    //roughness = 0.1f;
+    //roughness = 0.4f;
     
     glm::vec3 wiW;
     float pdf;

@@ -5,7 +5,7 @@
         {
             "TYPE":"Emitting",
             "RGB":[1.0, 1.0, 1.0],
-            "EMITTANCE":5.0
+            "EMITTANCE":10.0
         },
         "diffuse_white":
         {
@@ -70,7 +70,14 @@
         {
             "TYPE":"rect",
             "MATERIAL":"light",
-            "TRANS":[0.0,9.9,0.0],
+            "TRANS":[-3.0,9.9,0.0],
+            "ROTAT":[90.0,0.0,0.0],
+            "SCALE":[3.0,3.0,0.1]
+        },
+		{
+            "TYPE":"rect",
+            "MATERIAL":"light",
+            "TRANS":[3.0,9.9,0.0],
             "ROTAT":[90.0,0.0,0.0],
             "SCALE":[3.0,3.0,0.1]
         },
