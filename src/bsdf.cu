@@ -154,7 +154,7 @@ __device__ float pdfGGX(const glm::vec3& norW, const glm::vec3& whW, const glm::
     //    HdotN = 1.0f;
 
     if (HdotWo < FLT_EPSILON)
-        HdotWo = 1.0f;
+        return 0.0f;
 
 
     return (D * HdotN) / (4.0f * HdotWo);
@@ -228,10 +228,10 @@ inline __device__ glm::vec3 f_cookTorrance(const glm::vec3& albedo, const glm::v
     // Cook-Torrance specular
     float D = distributionGGX(norW, whW, roughness);
     float G = geometrySmith(norW, woW, wiW, roughness);
-    glm::vec3 F = fresnelSchlick(glm::max(glm::dot(whW, woW), 0.0f), F0);
+    glm::vec3 F = fresnelSchlick((glm::dot(whW, woW)), F0);
 
     glm::vec3 numerator = D * G * F;
-    float denominator = 4.0f * NdotWi * NdotWo + 0.0001f; // Add epsilon to prevent division by zero
+    float denominator = 4.0f * NdotWi * NdotWo + 0.001f; // Add epsilon to prevent division by zero
     glm::vec3 specular = numerator / denominator;
 
     // Lambertian component
@@ -259,7 +259,7 @@ inline __device__ glm::vec3 Sample_f_specular(const glm::vec3& albedo, const glm
     return f_spec(albedo, out_wiW, norW);
 }
 
-#define ROUGHNESS 0.5f
+#define ROUGHNESS 0.4f
 #define METALLIC 1.0f
 
 __device__ glm::vec3 Sample_f_cookTorrance(const Material& mat, const glm::vec3& woW, const glm::vec3& norW, thrust::default_random_engine& rng, glm::vec3& out_wiW, float& out_pdf)
@@ -291,8 +291,8 @@ __device__ glm::vec3 Sample_f_cookTorrance(const Material& mat, const glm::vec3&
         // hemisphere check
         if (glm::dot(wiW, norW) <= 0.0f)
         {
-            out_pdf = 0.0f;
-            return glm::vec3(0.0f);
+            out_pdf = 1.0f;
+            return glm::vec3(1.0f);
         }
     }
     else
@@ -307,10 +307,10 @@ __device__ glm::vec3 Sample_f_cookTorrance(const Material& mat, const glm::vec3&
         int stub = 42;
 
     float pdf = pdfCookTorrance(norW, whW, woW, wiW, ROUGHNESS, METALLIC);
-    if (pdf < FLT_EPSILON || isnan(pdf))
+    if (pdf < FLT_EPSILON)
     {
-        out_pdf = 0.0f;
-        return glm::vec3(0.0f);
+        out_pdf = 1.0f;
+        return glm::vec3(1.0f);
     }
 
     out_wiW = wiW;
@@ -552,7 +552,7 @@ __global__ void skMicrofacetPBR(ShadeKernelArgs args)
     float lambert = glm::abs(glm::dot(intersection.surfaceNormal, wiW));
     args.pathSegments[idx].throughput *= (bsdf / pdf);
     args.pathSegments[idx].prevBounceSample.pdf = pdf;
-    args.pathSegments[idx].prevBounceSample.matType = MT_DIFFUSE;
+    args.pathSegments[idx].prevBounceSample.matType = MT_MICROFACET_PBR;
     args.pathSegments[idx].ray = SpawnRay(view_point, wiW);
     args.pathSegments[idx].remainingBounces--;
 
@@ -562,7 +562,6 @@ __global__ void skMicrofacetPBR(ShadeKernelArgs args)
     if (SolveDirectLighting(args.sceneData, intersection, view_point, rng, directRadiance, wiW_Li, pdf_Li))
     {
         glm::vec3& whW = glm::normalize(woW + wiW_Li);
-
         float bsdf_pdf = pdfCookTorrance(intersection.surfaceNormal, whW, woW, wiW_Li, ROUGHNESS, METALLIC);
         float lambert_Li = glm::abs(glm::dot(intersection.surfaceNormal, wiW_Li));
 
