@@ -153,6 +153,7 @@ __host__ bool AllocDeviceTexture(HostTextureHandle& h, bool envMap)
     texDesc.filterMode = cudaFilterModeLinear;
     texDesc.readMode = envMap ? cudaReadModeElementType : cudaReadModeNormalizedFloat;
     texDesc.normalizedCoords = 1;
+    texDesc.sRGB = h.sRGB && !envMap ? 1 : 0;
 
     // Hold tex obj handle on host
     cudaCreateTextureObject(&h.texObj, &resDesc, &texDesc, nullptr);

@@ -50,7 +50,9 @@ __host__ __device__ float rectIntersectionTest(const Geom& geom, const Ray& ray,
 __host__ __device__ float boxIntersectionTest(Geom box, Ray r, glm::vec3& intersectionPoint, glm::vec3& normal, bool& outside);
 __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r, glm::vec3& intersectionPoint, glm::vec3& normal, bool& outside);
 __host__ __device__ float triangleIntersectionTest(Geom tri, Ray r, glm::vec3& intersectionPoint, glm::vec3& normal, bool& outside);
-__host__ __device__ float meshIntersectionTest(Geom meshGeom, const SceneData& sd, Ray r, glm::vec3& intersectionPoint, glm::vec3& normal, glm::vec2& uv, bool& outside);
+__host__ __device__ float meshIntersectionTest(Geom meshGeom, const SceneData& sd, Ray r, glm::vec3& intersectionPoint, glm::vec3& normal, glm::vec3& tangent, glm::vec2& uv, bool& outside);
+
+__device__ glm::vec3 sampleEnvironmentMap(cudaTextureObject_t envMap, const glm::vec3& direction);
 
 __device__ void sceneIntersect(PathSegment& path, const SceneData& sceneData, ShadeableIntersection& result, cudaTextureObject_t* envMaps, int ignoreGeomId = -1);
 __device__ void lightsIntersect(PathSegment& path, const Light* lights, int lights_size, ShadeableIntersection& result, LightID& resultId);

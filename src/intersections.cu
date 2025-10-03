@@ -23,6 +23,18 @@ __global__ void generateSortKeys(int N, const ShadeableIntersection* isects, Mat
     }
 }
 
+// Fallback option for creating TBN if the uvs are degenerate
+__host__ __device__ void createCoordinateSystem(const glm::vec3& normal, glm::vec3& tangent, glm::vec3& bitangent)
+{
+    if (fabsf(normal.x) > fabsf(normal.y)) {
+        tangent = glm::normalize(glm::vec3(-normal.z, 0.0f, normal.x));
+    }
+    else {
+        tangent = glm::normalize(glm::vec3(0.0f, normal.z, -normal.y));
+    }
+    bitangent = glm::cross(normal, tangent);
+}
+
 // Get the area of the rectangle in world space from its tfm
 __device__ float getRectArea(const glm::mat4& rectTfm)
 {
@@ -346,14 +358,13 @@ __host__ __device__  bool bvhIntersectionTest(const Ray& r, uint32_t bvhRootInde
     return hitAnything;
 }
 
-__host__ __device__  float meshIntersectionTest(Geom meshGeom, const SceneData& sd, Ray r, glm::vec3& intersectionPoint, glm::vec3& normal, glm::vec2& uv, bool& outside)
+__host__ __device__  float meshIntersectionTest(Geom meshGeom, const SceneData& sd, Ray r, glm::vec3& intersectionPoint, glm::vec3& normal, glm::vec3& tangent, glm::vec2& uv, bool& outside)
 {
     Ray localRay;
     localRay.origin = multiplyMV(meshGeom.inverseTransform, glm::vec4(r.origin, 1.0f));
     localRay.direction = glm::normalize(multiplyMV(meshGeom.inverseTransform, glm::vec4(r.direction, 0.0f)));
 
     outside = true;
-    //const Mesh mesh = sd.meshes[meshGeom.meshId];
     const BVHNode* bvhNodes = sd.bvhNodes;
 
     BVHIntersectResult isectResult;
@@ -376,10 +387,40 @@ __host__ __device__  float meshIntersectionTest(Geom meshGeom, const SceneData& 
         
         glm::uvec3 triIndices = sd.indices[isectResult.triIdx];
 
-        // Barycentric interp to get uv coords
-        uv = w * sd.uvs[triIndices.x] +
-             u * sd.uvs[triIndices.y] +
-             v * sd.uvs[triIndices.z];
+        // Compute UVs and tangents
+        glm::vec3 v0 = sd.vertices[triIndices.x];
+        glm::vec3 v1 = sd.vertices[triIndices.y];
+        glm::vec3 v2 = sd.vertices[triIndices.z];
+
+        glm::vec2 uv0 = sd.uvs[triIndices.x];
+        glm::vec2 uv1 = sd.uvs[triIndices.y];
+        glm::vec2 uv2 = sd.uvs[triIndices.z];
+
+        glm::vec3 edge1 = v1 - v0;
+        glm::vec3 edge2 = v2 - v0;
+
+        glm::vec2 deltaUV1 = uv1 - uv0;
+        glm::vec2 deltaUV2 = uv2 - uv0;
+        
+        float det = deltaUV1.x * deltaUV2.y - deltaUV1.y * deltaUV2.x;
+
+        if (fabsf(det) < FLT_EPSILON)
+        {
+            glm::vec3 bitangent;
+            createCoordinateSystem(normal, tangent, bitangent);
+        }
+        else
+        {
+            float invDet = 1.0f / (det);
+            tangent = invDet * (deltaUV2.y * edge1 - deltaUV1.y * edge2);
+            tangent = glm::normalize(tangent - normal * glm::dot(normal, tangent)); // correction
+        }
+
+
+        // Barycentric interp to get final uv coords
+        uv = w * uv0 +
+             u * uv1 +
+             v * uv2;
 
         return glm::length(r.origin - intersectionPoint);
     }
@@ -406,6 +447,7 @@ __device__ void sceneIntersect(PathSegment& path, const SceneData& sceneData, Sh
     float t;
     glm::vec3 intersect_point;
     glm::vec3 normal;
+    glm::vec3 tangent;
     glm::vec2 uv;
     float t_min = FLT_MAX;
     int hit_geom_index = -1;
@@ -415,6 +457,7 @@ __device__ void sceneIntersect(PathSegment& path, const SceneData& sceneData, Sh
 
     glm::vec3 tmp_intersect;
     glm::vec3 tmp_normal;
+    glm::vec3 tmp_tangent(-1.0f); // some isect functions don't support tangent
     glm::vec2 tmp_uv(-1.0f); // some isect functions don't support UV
     glm::vec3 ToLight_Local; // TODO: This works for rect only right now
 
@@ -441,7 +484,7 @@ __device__ void sceneIntersect(PathSegment& path, const SceneData& sceneData, Sh
         }
         else if (geom.type == GT_MESH)
         {
-            t = meshIntersectionTest(geom, sceneData, pathCopy.ray, tmp_intersect, tmp_normal, tmp_uv, outside);
+            t = meshIntersectionTest(geom, sceneData, pathCopy.ray, tmp_intersect, tmp_normal, tmp_tangent, tmp_uv, outside);
         }
         else if (geom.type == GT_RECT)
         {
@@ -458,6 +501,7 @@ __device__ void sceneIntersect(PathSegment& path, const SceneData& sceneData, Sh
             hit_geom_type = geom.type;
             intersect_point = tmp_intersect;
             normal = tmp_normal;
+            tangent = tmp_tangent;
             uv = tmp_uv;
         }
     }
@@ -492,6 +536,7 @@ __device__ void sceneIntersect(PathSegment& path, const SceneData& sceneData, Sh
         result.t = t_min;
         result.matSortKey = hitMaterialKey;
         result.surfaceNormal = normal;
+        result.tangent = tangent;
         result.uv = uv;
         result.hitGeomIdx = hit_geom_index; // TODO: evaluate whether this is necessary (maybe just copy the geom transform?)
     }

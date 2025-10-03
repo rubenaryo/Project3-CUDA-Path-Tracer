@@ -314,30 +314,50 @@ __device__ glm::vec3 Sample_f_cookTorrance(const glm::vec3& albedo, const glm::v
     return f_cookTorrance(albedo, norW, woW, wiW, roughness, metallic);
 }
 
-__device__ bool SolveDirectLighting(const SceneData& sd, ShadeableIntersection isect, glm::vec3 view_point, thrust::default_random_engine& rng, glm::vec3& out_radiance, glm::vec3& out_wiW, float& out_pdf)
+__device__ bool SolveDirectLighting(const SceneData& sd, cudaTextureObject_t envMapObj, const glm::vec3& norW, glm::vec3 view_point, thrust::default_random_engine& rng, glm::vec3& out_radiance, glm::vec3& out_wiW, float& out_pdf)
 {
+    envMapObj = 0;
     int numLights = sd.lights_size;
-    if (numLights <= 0)
-        return false;
+    //if (numLights <= 0)
+    //    return false;
 
-    thrust::uniform_int_distribution<int> iu0N(0, numLights - 1);
-    int randomLightIndex = iu0N(rng);
-    const Light chosenLight = sd.lights[randomLightIndex];
-    glm::vec3 norW = isect.surfaceNormal;
+    int randomLightIndex = 0;
+
+    if (numLights > 0)
+    {
+        thrust::uniform_int_distribution<int> iu0N(0, envMapObj != 0 ? numLights : numLights-1);
+        randomLightIndex = iu0N(rng);
+    }
 
     float pdf_Li;
     float distToLight;
     glm::vec3 wiW_Li;
+    int ignoreGeomId = -1;
+    glm::vec3 liResult;
 
-    glm::vec3 liResult = Sample_Li(view_point, norW, chosenLight, numLights, rng, wiW_Li, pdf_Li, distToLight);
-    if (pdf_Li < FLT_EPSILON)
-        return false;
+    if (randomLightIndex == numLights) // This is out of bounds for the array, this represents the environment map.
+    {
+        // Like diffuse bsdf, just choose a random direction in our local hemisphere.
+        wiW_Li = calculateRandomDirectionInHemisphere(norW, rng);
+        pdf_Li = glm::abs(glm::dot(wiW_Li, norW)) * INV_PI;
+
+        liResult = sampleEnvironmentMap(envMapObj, wiW_Li);
+    }
+    else
+    {
+        const Light chosenLight = sd.lights[randomLightIndex];
+        ignoreGeomId = chosenLight.geomId;
+
+        liResult = Sample_Li(view_point, norW, chosenLight, numLights, rng, wiW_Li, pdf_Li, distToLight);
+        if (pdf_Li < FLT_EPSILON)
+            return false;
+    }
 
     // Test occlusion
     PathSegment shadowPath;
     shadowPath.ray = SpawnRay(view_point, wiW_Li);
     ShadeableIntersection shadowTestResult;
-    sceneIntersect(shadowPath, sd, shadowTestResult, nullptr, chosenLight.geomId);
+    sceneIntersect(shadowPath, sd, shadowTestResult, nullptr, ignoreGeomId);
     
     if (shadowTestResult.t >= 0.0f && shadowTestResult.t < (distToLight - FLT_EPSILON))
         return false;
@@ -400,7 +420,8 @@ __global__ void skDiffuse(ShadeKernelArgs args)
     }
     
     // BSDF Sampling
-    bsdf = Sample_f_diffuse(albedo, intersection.surfaceNormal, rng, wiW_bsdf, pdf_bsdf);
+    glm::vec3 norW = intersection.surfaceNormal;
+    bsdf = Sample_f_diffuse(albedo, norW, rng, wiW_bsdf, pdf_bsdf);
     if (pdf_bsdf < FLT_EPSILON)
     {
         // Something went wrong, terminate
@@ -412,7 +433,7 @@ __global__ void skDiffuse(ShadeKernelArgs args)
     glm::vec3 wiW_Li;
     float pdf_Li;
 
-    float lambert = glm::abs(glm::dot(intersection.surfaceNormal, wiW_bsdf));
+    float lambert = glm::abs(glm::dot(norW, wiW_bsdf));
     args.pathSegments[idx].throughput *= (bsdf/pdf_bsdf) * lambert;
     args.pathSegments[idx].prevBounceSample.pdf = pdf_bsdf;
     args.pathSegments[idx].prevBounceSample.matType = MT_DIFFUSE;
@@ -422,10 +443,11 @@ __global__ void skDiffuse(ShadeKernelArgs args)
     // Direct Light Sampling
     // Key difference using MIS: Accumulate direct lighting radiance here.
     glm::vec3 throughput = args.pathSegments[idx].throughput;
-    if (SolveDirectLighting(args.sceneData, intersection, view_point, rng, directRadiance, wiW_Li, pdf_Li))
+    cudaTextureObject_t envMapObj = args.envMaps ? args.envMaps[0] : 0;
+    if (SolveDirectLighting(args.sceneData, envMapObj, norW, view_point, rng, directRadiance, wiW_Li, pdf_Li))
     {
-        float bsdf_pdf = Pdf(material.type, intersection.surfaceNormal, -path.ray.direction, wiW_Li);
-        float lambert_Li = glm::abs(glm::dot(intersection.surfaceNormal, wiW_Li));
+        float bsdf_pdf = Pdf(material.type, norW, -path.ray.direction, wiW_Li);
+        float lambert_Li = glm::abs(glm::dot(norW, wiW_Li));
 
         // Assemble direct lighting components
         glm::vec3 directLightResult = args.pathSegments[idx].throughput * directRadiance * lambert_Li / pdf_Li;
@@ -522,22 +544,43 @@ __global__ void skMicrofacetPBR(ShadeKernelArgs args)
     glm::vec3 thisBounceRadiance(0.0f); // Comes from direct lighting only
 
     const glm::vec3 ERROR_COLOR(1.0f, 0.4118f, 0.7059f);
-    const glm::vec4 metallicRoughFallback(material.metallic, material.roughness, 0.0f, 0.0f);
+    const glm::vec4 metallicRoughFallback(material.metallic, material.roughness, 1.0f, 1.0f);
 
     glm::vec3 woW = -path.ray.direction;
 
     glm::vec3 albedo = TryTextureSample(args.textures, material.diffuseTexId, intersection.uv, ERROR_COLOR);
-    glm::vec3 norW = TryTextureSample(args.textures, material.normalTexId, intersection.uv, intersection.surfaceNormal);
     glm::vec4 metallicRough = TryTextureSample(args.textures, material.metallicRoughTexId, intersection.uv, metallicRoughFallback);
 
-    //norW = intersection.surfaceNormal;
+    glm::vec3 norW = intersection.surfaceNormal;
+    
+    if (material.normalTexId != -1)
+    {
+        glm::vec3 sampledNormal = glm::vec3(TextureSample(args.textures[material.normalTexId], intersection.uv));
+        glm::vec3 norT = (2.0f * sampledNormal) - glm::vec3(1.0f);
+
+        glm::vec3 tangent = intersection.tangent;
+        glm::vec3 bitangent = glm::normalize(glm::cross(norW, tangent));
+
+        // Ensure right-handed coordinate system
+        if (glm::dot(glm::cross(norW, tangent), bitangent) < 0.0f) {
+            tangent = -tangent;
+        }
+
+        //createCoordinateSystem(norW, tangent, bitangent);
+
+        glm::mat3 TBN(tangent, bitangent, norW);
+        norW = glm::normalize(TBN * norT);
+    }
+    
+    
     //albedo = material.color;
     //metallicRough = metallicRoughFallback;
 
-    float metallic = metallicRough.x;
-    float roughness = metallicRough.y;
+    float metallic = glm::clamp(metallicRough.b, 0.001f, 1.0f);
+    float roughness = glm::clamp(metallicRough.g, 0.001f, 1.0f);
 
-    metallic = 1.0f;
+    //metallic = 1.0f;
+    //roughness = 0.1f;
     
     glm::vec3 wiW;
     float pdf;
@@ -558,7 +601,7 @@ __global__ void skMicrofacetPBR(ShadeKernelArgs args)
     glm::vec3 wiW_Li;
     float pdf_Li;
 
-    float lambert = glm::abs(glm::dot(intersection.surfaceNormal, wiW));
+    float lambert = glm::abs(glm::dot(norW, wiW));
     args.pathSegments[idx].throughput *= (bsdf / pdf);
     args.pathSegments[idx].prevBounceSample.pdf = pdf;
     args.pathSegments[idx].prevBounceSample.matType = MT_MICROFACET_PBR;
@@ -567,12 +610,13 @@ __global__ void skMicrofacetPBR(ShadeKernelArgs args)
 
     // Direct Light Sampling
     // Key difference using MIS: Accumulate direct lighting radiance here.
+    cudaTextureObject_t envMapObj = args.envMaps ? args.envMaps[0] : 0;
     glm::vec3 throughput = args.pathSegments[idx].throughput;
-    if (SolveDirectLighting(args.sceneData, intersection, view_point, rng, directRadiance, wiW_Li, pdf_Li))
+    if (SolveDirectLighting(args.sceneData, envMapObj, norW, view_point, rng, directRadiance, wiW_Li, pdf_Li))
     {
         glm::vec3& whW = glm::normalize(woW + wiW_Li);
-        float bsdf_pdf = pdfCookTorrance(intersection.surfaceNormal, whW, woW, wiW_Li, material.roughness, material.metallic);
-        float lambert_Li = glm::abs(glm::dot(intersection.surfaceNormal, wiW_Li));
+        float bsdf_pdf = pdfCookTorrance(norW, whW, woW, wiW_Li, roughness, metallic);
+        float lambert_Li = glm::abs(glm::dot(norW, wiW_Li));
 
         // Assemble direct lighting components
         glm::vec3 directLightResult = args.pathSegments[idx].throughput * directRadiance * lambert_Li / pdf_Li;

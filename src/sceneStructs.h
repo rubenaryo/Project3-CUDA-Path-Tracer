@@ -192,6 +192,7 @@ struct HostTextureHandle
     cudaArray_t cudaArr = nullptr;
     int width = 0;
     int height = 0;
+    bool sRGB = false;
 };
 
 struct BSDFSample
@@ -238,6 +239,7 @@ struct ShadeableIntersection
 {
   float t;
   glm::vec3 surfaceNormal;
+  glm::vec3 tangent;
   glm::vec2 uv;
   MaterialSortKey matSortKey = SORTKEY_INVALID;
   int hitGeomIdx = -1;

@@ -106,7 +106,7 @@ void Scene::loadFromJSON(const std::string& jsonName)
             newMaterial.metallic  = glm::clamp((float)p["METALLIC"], MIN_METALLIC, 1.0f);
         }
 
-        auto TryLoadAssignTexture = [p](const char* attrName, std::vector<HostTextureHandle>& out_handleArr, int& out_id)
+        auto TryLoadAssignTexture = [p](const char* attrName, std::vector<HostTextureHandle>& out_handleArr, bool sRGB, int& out_id)
         {
             if (p.find(attrName) != p.end())
             {
@@ -124,17 +124,18 @@ void Scene::loadFromJSON(const std::string& jsonName)
                 out_id = out_handleArr.size();
                 HostTextureHandle& handle = out_handleArr.emplace_back();
                 handle.filePath = std::move(absoluteStr);
+                handle.sRGB = sRGB;
             }
             return true; // We either don't need it, or do and it exists.
         };
 
-        if (!TryLoadAssignTexture("DIFFUSE", textures, newMaterial.diffuseTexId))
+        if (!TryLoadAssignTexture("DIFFUSE", textures, false, newMaterial.diffuseTexId))
             continue;
 
-        if (!TryLoadAssignTexture("NORMAL", textures, newMaterial.normalTexId))
+        if (!TryLoadAssignTexture("NORMAL", textures, false, newMaterial.normalTexId))
             continue;
 
-        if (!TryLoadAssignTexture("METALLIC_ROUGHNESS", textures, newMaterial.metallicRoughTexId))
+        if (!TryLoadAssignTexture("METALLIC_ROUGHNESS", textures, false, newMaterial.metallicRoughTexId))
             continue;
 
         MatNameToID[name] = materials.size();

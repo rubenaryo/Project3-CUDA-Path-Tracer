@@ -52,7 +52,7 @@
             "TYPE":"MicrofacetPBR",
             "RGB":[0.98, 0.98, 0.98],
             "ROUGHNESS":0.0,
-			"METALLIC":1.0
+			"METALLIC":0.3
         }
     },
     "Camera":
@@ -71,16 +71,23 @@
         {
             "TYPE":"rect",
             "MATERIAL":"light",
-            "TRANS":[0.0,8.0,20.0],
-            "ROTAT":[0.0,0.0,0.0],
-            "SCALE":[5.0,5.0,1.0]
+            "TRANS":[0.0,9.9,0.0],
+            "ROTAT":[90.0,0.0,0.0],
+            "SCALE":[3.0,3.0,0.1]
         },
         {
             "TYPE":"cube",
             "MATERIAL":"diffuse_white",
             "TRANS":[0.0,0.0,0.0],
             "ROTAT":[0.0,0.0,0.0],
-            "SCALE":[100.0,0.01,100.0]
+            "SCALE":[10.0,0.01,10.0]
+        },
+        {
+            "TYPE":"cube",
+            "MATERIAL":"diffuse_white",
+            "TRANS":[0.0,10.0,0.0],
+            "ROTAT":[0.0,0.0,90.0],
+            "SCALE":[0.01,10.0,10.0]
         },
         {
             "TYPE":"cube",
@@ -89,12 +96,26 @@
             "ROTAT":[0.0,90.0,0.0],
             "SCALE":[0.01,10.0,10.0]
         },
+        {
+            "TYPE":"cube",
+            "MATERIAL":"diffuse_red",
+            "TRANS":[-5.0,5.0,0.0],
+            "ROTAT":[0.0,0.0,0.0],
+            "SCALE":[0.01,10.0,10.0]
+        },
+        {
+            "TYPE":"cube",
+            "MATERIAL":"diffuse_green",
+            "TRANS":[5.0,5.0,0.0],
+            "ROTAT":[0.0,0.0,0.0],
+            "SCALE":[0.01,10.0,10.0]
+        },
 		{
             "TYPE":"mesh",
             "MATERIAL":["trophy", "trophybase"],
-            "TRANS":[0.0,-5.55,0.0],
-            "ROTAT":[0.0,0.0,0.0],
-            "SCALE":[0.35, 0.35, 0.35],
+            "TRANS":[0.0,-3.9,0.0],
+            "ROTAT":[0.0,-45.0,0.0],
+            "SCALE":[0.25, 0.25, 0.25],
 			"PATH":"../scenes/meshes/Trophy/scene.gltf"
         }
     ]
