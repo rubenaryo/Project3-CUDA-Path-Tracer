@@ -30,7 +30,7 @@ enum MaterialType : uint16_t
     MT_DIFFUSE = 0,
     MT_SPECULAR,
     MT_EMISSIVE,
-    MT_REFRACTIVE,
+    MT_MICROFACET_PBR,
 
     MT_COUNT,
     MT_FIRST = 0,

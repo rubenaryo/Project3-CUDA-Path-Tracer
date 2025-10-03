@@ -66,7 +66,7 @@ __device__ float Pdf(MaterialType matType, glm::vec3 norW, glm::vec3 woW, glm::v
     case MT_DIFFUSE:
         return squareToHemisphereCosinePDF(wi);
     case MT_SPECULAR:
-    case MT_REFRACTIVE:
+    case MT_MICROFACET_PBR:
         return 0.0f; // Spec goes directly to the light, and refractive goes into the material.
     }
 
@@ -239,8 +239,8 @@ __global__ void skSpecular(ShadeKernelArgs args)
     glm::vec3 bsdf = Sample_f_specular(material.color, path.ray.direction, intersection.surfaceNormal, wiW_bsdf, pdf_bsdf);
 
     // Spec bounces don't need to do direct light calculation, since they only reflect light in one direction.
-
-    args.pathSegments[idx].throughput *= material.color;
+    float lambert = glm::abs(glm::dot(intersection.surfaceNormal, wiW_bsdf));
+    args.pathSegments[idx].throughput *= (bsdf * lambert) / pdf_bsdf;
     args.pathSegments[idx].ray = SpawnRay(view_point, wiW_bsdf);
     args.pathSegments[idx].prevBounceSample.pdf = pdf_bsdf;
     args.pathSegments[idx].prevBounceSample.matType = MT_SPECULAR;
@@ -292,7 +292,7 @@ __global__ void skEmissive(ShadeKernelArgs args)
     args.pathSegments[idx].remainingBounces = 0; // Mark it for culling later
 }
 
-__global__ void skRefractive(ShadeKernelArgs args)
+__global__ void skMicrofacetPBR(ShadeKernelArgs args)
 {
     return; // TODO
 }
@@ -413,7 +413,7 @@ static ShadeKernel sKernels[] =
     skDiffuse,
     skSpecular,
     skEmissive,
-    skRefractive
+    skMicrofacetPBR
 };
 #elif DIRECT_SAMPLING
 static ShadeKernel sKernels[] =
@@ -421,7 +421,7 @@ static ShadeKernel sKernels[] =
     skDiffuseDirect,
     skSpecular,
     skEmissiveSimple,
-    skRefractive
+    skMicrofacetPBR
 };
 #else ONLY_BSDF_SAMPLING
 static ShadeKernel sKernels[] =
@@ -429,7 +429,7 @@ static ShadeKernel sKernels[] =
     skDiffuseSimple,
     skSpecular,
     skEmissiveSimple,
-    skRefractive
+    skMicrofacetPBR
 };
 #endif
 
