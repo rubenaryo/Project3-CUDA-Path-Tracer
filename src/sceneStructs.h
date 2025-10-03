@@ -215,17 +215,10 @@ struct Light
 struct Material
 {
     glm::vec3 color;
-    struct
-    {
-        glm::vec3 color;
-        float exponent;
-    } specular;
-
     MaterialType type = MT_INVALID;
-    float hasReflective;
-    float hasRefractive;
-    float indexOfRefraction;
     float emittance;
+    float roughness;
+    float metallic;
 
     int diffuseTexId = -1;
     int normalTexId = -1;

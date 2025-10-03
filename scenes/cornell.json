@@ -26,8 +26,7 @@
         "specular_white":
         {
             "TYPE":"Specular",
-            "RGB":[0.98, 0.98, 0.98],
-            "ROUGHNESS":0.0
+            "RGB":[0.98, 0.98, 0.98]
         },
 		"fox":
 		{
@@ -39,7 +38,8 @@
         {
             "TYPE":"MicrofacetPBR",
             "RGB":[0.98, 0.98, 0.98],
-            "ROUGHNESS":0.0
+            "ROUGHNESS":0.0,
+			"METALLIC":0.3
         }
     },
     "Camera":

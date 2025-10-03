@@ -59,8 +59,13 @@ __device__ float pow5(float x) {
 }
 
 // Schlick's Fresnel approximation
-__device__ glm::vec3 fresnelSchlick(float cosTheta, const glm::vec3& F0) {
-    return F0 + (glm::vec3(1.0f) - F0) * pow5(glm::clamp(1.0f - cosTheta, 0.0f, 1.0f));
+//__device__ glm::vec3 fresnelSchlick(float cosTheta, const glm::vec3& F0) {
+//    return F0 + (glm::vec3(1.0f) - F0) * pow5(glm::clamp(1.0f - cosTheta, 0.0f, 1.0f));
+//}
+
+__device__ glm::vec3 fresnelSchlickRoughness(float cosTheta, glm::vec3 F0, float roughness)
+{
+    return F0 + (glm::max(glm::vec3(1.0f - roughness), F0) - F0) * pow5(glm::clamp(1.0f - cosTheta, 0.0f, 1.0f));
 }
 
 // GGX/Trowbridge-Reitz Normal Distribution Function
@@ -72,9 +77,7 @@ __device__ float distributionGGX(const glm::vec3& norW, const glm::vec3& whW, fl
 
     float denom = (NdotH2 * (a2 - 1.0f) + 1.0f);
     denom = PI * denom * denom;
-
-    if (denom < FLT_EPSILON)
-        return a2;
+    denom = glm::max(denom, 0.01f);
 
     return a2 / denom;
 }
@@ -96,8 +99,7 @@ __device__ glm::vec3 sampleGGX(const glm::vec3& norW, float roughness, thrust::d
     float cosTheta = 1.0f / sqrt(1.0f + tanTheta2);
     float sinTheta = sqrt(glm::max(0.0f, 1.0f - cosTheta * cosTheta));
 
-    if (isnan(cosTheta) || isnan(sinTheta))
-        int stub = 42;
+    assert(!isnan(cosTheta) && !isnan(sinTheta));
 
     // Cartesian
     glm::vec3 H;
@@ -112,12 +114,7 @@ __device__ glm::vec3 sampleGGX(const glm::vec3& norW, float roughness, thrust::d
 
     glm::vec3 result = glm::normalize(tangent * H.x + bitangent * H.y + norW * H.z);
 
-    if (isnanVec3(result))
-    {
-        int stub = 42;
-    }
-
-
+    assert(!isnanVec3(result));
     return result;
 }
 
@@ -130,8 +127,8 @@ __device__ float geometrySchlickGGX(float NdotV, float roughness) {
 }
 
 __device__ float geometrySmith(const glm::vec3& norW, const glm::vec3& woW, const glm::vec3& wiW, float roughness) {
-    float NdotWo = glm::max(glm::dot(norW, woW), 0.0f);
-    float NdotWi = glm::max(glm::dot(norW, wiW), 0.0f);
+    float NdotWo = glm::max(glm::dot(norW, woW), 0.1f);
+    float NdotWi = glm::max(glm::dot(norW, wiW), 0.1f);
     float ggx2 = geometrySchlickGGX(NdotWo, roughness);
     float ggx1 = geometrySchlickGGX(NdotWi, roughness);
 
@@ -147,14 +144,9 @@ __device__ float squareToHemisphereCosinePDF(const glm::vec3& sampleL)
 
 __device__ float pdfGGX(const glm::vec3& norW, const glm::vec3& whW, const glm::vec3& woW, float roughness) {
     float HdotN  = glm::max(glm::dot(whW, norW), 0.0f);
-    float HdotWo = glm::max(glm::dot(whW, woW), 0.0f);
+    float HdotWo = glm::max(glm::dot(whW, woW), 0.01f);
     
     float D = distributionGGX(norW, whW, roughness);
-    //if (HdotN < FLT_EPSILON)
-    //    HdotN = 1.0f;
-
-    if (HdotWo < FLT_EPSILON)
-        return 0.0f;
 
 
     return (D * HdotN) / (4.0f * HdotWo);
@@ -162,16 +154,15 @@ __device__ float pdfGGX(const glm::vec3& norW, const glm::vec3& whW, const glm::
 
 __device__ float pdfCookTorrance(const glm::vec3& norW, const glm::vec3& whW, const glm::vec3& woW, const glm::vec3& wiW, float roughness, float metallic) {
     // Mix between diffuse and specular PDF based on Fresnel
-    float VdotH = glm::max(glm::dot(woW, whW), 0.0f);
+    float VdotH = glm::max(glm::dot(woW, whW), 0.01f);
     glm::vec3 F0 = glm::mix(glm::vec3(0.04f), glm::vec3(1.0f), metallic);
-    glm::vec3 F = fresnelSchlick(VdotH, F0);
+    glm::vec3 F = fresnelSchlickRoughness(VdotH, F0, roughness);
     float specularWeight = (F.x + F.y + F.z) / 3.0f;
 
     float pdfSpec = pdfGGX(norW, whW, woW, roughness);
     float pdfDiff = glm::max(glm::dot(norW, wiW), 0.0f) * INV_PI;
 
-    if (isnan(pdfSpec) || isnan(pdfDiff) || isnan(specularWeight))
-        int stub = 42;
+    assert(!isnan(pdfSpec) && !isnan(pdfDiff) && !isnan(specularWeight));
 
     return glm::mix(pdfDiff, pdfSpec, specularWeight);
 }
@@ -228,7 +219,7 @@ inline __device__ glm::vec3 f_cookTorrance(const glm::vec3& albedo, const glm::v
     // Cook-Torrance specular
     float D = distributionGGX(norW, whW, roughness);
     float G = geometrySmith(norW, woW, wiW, roughness);
-    glm::vec3 F = fresnelSchlick((glm::dot(whW, woW)), F0);
+    glm::vec3 F = fresnelSchlickRoughness((glm::dot(whW, woW)), F0, roughness);
 
     glm::vec3 numerator = D * G * F;
     float denominator = 4.0f * NdotWi * NdotWo + 0.001f; // Add epsilon to prevent division by zero
@@ -259,18 +250,17 @@ inline __device__ glm::vec3 Sample_f_specular(const glm::vec3& albedo, const glm
     return f_spec(albedo, out_wiW, norW);
 }
 
-#define ROUGHNESS 0.4f
-#define METALLIC 1.0f
-
 __device__ glm::vec3 Sample_f_cookTorrance(const Material& mat, const glm::vec3& woW, const glm::vec3& norW, thrust::default_random_engine& rng, glm::vec3& out_wiW, float& out_pdf)
 {
     // TODO: These should come from textures
     const glm::vec3 ALBEDO = mat.color;
+    float metallic = mat.metallic;
+    float roughness = mat.roughness;
 
-    glm::vec3 F0 = glm::mix(glm::vec3(0.04f), ALBEDO, METALLIC);
+    glm::vec3 F0 = glm::mix(glm::vec3(0.04f), ALBEDO, metallic);
 
     float NdotWo = glm::max(glm::dot(woW, norW), 0.0f);
-    glm::vec3 F = fresnelSchlick(NdotWo, F0);
+    glm::vec3 F = fresnelSchlickRoughness(NdotWo, F0, roughness);
     float specWeight = (F.x + F.y + F.z) / 3.0f; // Avg of each component, used to choose between spec and diffuse
 
     glm::vec3 wiW(0.0f);
@@ -282,11 +272,10 @@ __device__ glm::vec3 Sample_f_cookTorrance(const Material& mat, const glm::vec3&
     float u1 = u01(rng);
     if (u1 < specWeight)
     {
-        whW = sampleGGX(norW, ROUGHNESS, rng);
+        whW = sampleGGX(norW, roughness, rng);
         wiW = glm::reflect(-woW, whW);
 
-        if (isnanVec3(wiW) || isnanVec3(whW))
-            int stub = 42;
+        assert(!isnanVec3(wiW) && !isnanVec3(whW));
 
         // hemisphere check
         if (glm::dot(wiW, norW) <= 0.0f)
@@ -303,10 +292,9 @@ __device__ glm::vec3 Sample_f_cookTorrance(const Material& mat, const glm::vec3&
     }
 
 
-    if (isnanVec3(wiW) || isnanVec3(whW))
-        int stub = 42;
+    assert(!isnanVec3(wiW) && !isnanVec3(whW));
 
-    float pdf = pdfCookTorrance(norW, whW, woW, wiW, ROUGHNESS, METALLIC);
+    float pdf = pdfCookTorrance(norW, whW, woW, wiW, roughness, metallic);
     if (pdf < FLT_EPSILON)
     {
         out_pdf = 1.0f;
@@ -315,7 +303,7 @@ __device__ glm::vec3 Sample_f_cookTorrance(const Material& mat, const glm::vec3&
 
     out_wiW = wiW;
     out_pdf = pdf;
-    return f_cookTorrance(ALBEDO, norW, woW, wiW, ROUGHNESS, METALLIC);
+    return f_cookTorrance(ALBEDO, norW, woW, wiW, roughness, metallic);
 }
 
 __device__ bool SolveDirectLighting(const SceneData& sd, ShadeableIntersection isect, glm::vec3 view_point, thrust::default_random_engine& rng, glm::vec3& out_radiance, glm::vec3& out_wiW, float& out_pdf)
@@ -540,10 +528,10 @@ __global__ void skMicrofacetPBR(ShadeKernelArgs args)
         return;
     }
 
-    if (isnanVec3(bsdf))
-    {
-        int stub = 42;
-    }
+    bsdf = glm::min(bsdf, glm::vec3(1.0f));
+
+    assert(bsdf.x > 0 && bsdf.y > 0 && bsdf.z > 0);
+    assert(!isnanVec3(bsdf));
 
     glm::vec3 directRadiance;
     glm::vec3 wiW_Li;
@@ -562,7 +550,7 @@ __global__ void skMicrofacetPBR(ShadeKernelArgs args)
     if (SolveDirectLighting(args.sceneData, intersection, view_point, rng, directRadiance, wiW_Li, pdf_Li))
     {
         glm::vec3& whW = glm::normalize(woW + wiW_Li);
-        float bsdf_pdf = pdfCookTorrance(intersection.surfaceNormal, whW, woW, wiW_Li, ROUGHNESS, METALLIC);
+        float bsdf_pdf = pdfCookTorrance(intersection.surfaceNormal, whW, woW, wiW_Li, material.roughness, material.metallic);
         float lambert_Li = glm::abs(glm::dot(intersection.surfaceNormal, wiW_Li));
 
         // Assemble direct lighting components

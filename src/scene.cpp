@@ -128,6 +128,12 @@ void Scene::loadFromJSON(const std::string& jsonName)
             const auto& col = p["RGB"];
             newMaterial.color = glm::vec3(col[0], col[1], col[2]);
             newMaterial.type = MT_MICROFACET_PBR;
+
+            static const float MIN_ROUGHNESS = 0.01f;
+            static const float MIN_METALLIC = 0.01f;
+
+            newMaterial.roughness = glm::clamp((float)p["ROUGHNESS"], MIN_ROUGHNESS, 1.0f);
+            newMaterial.metallic  = glm::clamp((float)p["METALLIC"], MIN_METALLIC, 1.0f);
         }
 
         auto TryLoadAssignTexture = [p](const char* attrName, std::vector<HostTextureHandle>& out_handleArr, int& out_id)
