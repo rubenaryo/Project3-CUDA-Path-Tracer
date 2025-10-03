@@ -107,6 +107,9 @@ inline __device__ glm::vec3 Sample_f_specular(const glm::vec3& albedo, const glm
 __device__ bool SolveDirectLighting(const SceneData& sd, ShadeableIntersection isect, glm::vec3 view_point, thrust::default_random_engine& rng, glm::vec3& out_radiance, glm::vec3& out_wiW, float& out_pdf)
 {
     int numLights = sd.lights_size;
+    if (numLights <= 0)
+        return false;
+
     thrust::uniform_int_distribution<int> iu0N(0, numLights - 1);
     int randomLightIndex = iu0N(rng);
     const Light chosenLight = sd.lights[randomLightIndex];
@@ -287,13 +290,15 @@ __global__ void skEmissive(ShadeKernelArgs args)
         float bsdfPdf = path.prevBounceSample.pdf;
         totalRadiance += (material.color * material.emittance) * throughput * PowerHeuristic(1, bsdfPdf, 1, lightPdf);
     }
-    volatile glm::vec3 loCopy = args.pathSegments[idx].Lo;
+
     args.pathSegments[idx].Lo += totalRadiance;
     args.pathSegments[idx].remainingBounces = 0; // Mark it for culling later
 }
 
 __global__ void skMicrofacetPBR(ShadeKernelArgs args)
 {
+
+
     return; // TODO
 }
 
