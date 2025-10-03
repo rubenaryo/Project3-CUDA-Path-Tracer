@@ -28,18 +28,31 @@
             "TYPE":"Specular",
             "RGB":[0.98, 0.98, 0.98]
         },
-		"fox":
+		"trophy":
 		{
-			"TYPE":"Diffuse",
+			"TYPE":"MicrofacetPBR",
             "RGB":[0.98, 0.98, 0.98],
-			"DIFFUSE":"../scenes/meshes/Fox/Texture.png"
+			"ROUGHNESS":0.0,
+			"METALLIC":1.0,
+			"DIFFUSE":"../scenes/meshes/Trophy/Trophy_Mtl_baseColor.png",
+			"NORMAL":"../scenes/meshes/Trophy/Trophy_Mtl_normal.png",
+			"METALLIC_ROUGHNESS":"../scenes/meshes/Trophy/Trophy_Mtl_metallicRoughness.png"
+		},
+		"trophybase":
+		{
+			"TYPE":"MicrofacetPBR",
+            "RGB":[0.98, 0.98, 0.98],
+			"ROUGHNESS":0.0,
+			"METALLIC":1.0,
+			"DIFFUSE":"../scenes/meshes/Trophy/Trophy_base_Mtl_baseColor.png",
+			"METALLIC_ROUGHNESS":"../scenes/meshes/Trophy/Trophy_base_Mtl_metallicRoughness.png"
 		},
 		"pbr":
         {
             "TYPE":"MicrofacetPBR",
             "RGB":[0.98, 0.98, 0.98],
             "ROUGHNESS":0.0,
-			"METALLIC":0.3
+			"METALLIC":1.0
         }
     },
     "Camera":
@@ -55,11 +68,11 @@
     },
     "Objects":
     [
-        {
+		{
             "TYPE":"rect",
             "MATERIAL":"light",
-            "TRANS":[0.0,9.9,0.0],
-            "ROTAT":[90.0,0.0,0.0],
+            "TRANS":[6.0,15.0,0.0],
+            "ROTAT":[-45.0,70.0,-70.0],
             "SCALE":[3.0,3.0,0.1]
         },
         {
@@ -67,50 +80,15 @@
             "MATERIAL":"diffuse_white",
             "TRANS":[0.0,0.0,0.0],
             "ROTAT":[0.0,0.0,0.0],
-            "SCALE":[10.0,0.01,10.0]
-        },
-        {
-            "TYPE":"cube",
-            "MATERIAL":"diffuse_white",
-            "TRANS":[0.0,10.0,0.0],
-            "ROTAT":[0.0,0.0,90.0],
-            "SCALE":[0.01,10.0,10.0]
-        },
-        {
-            "TYPE":"cube",
-            "MATERIAL":"diffuse_white",
-            "TRANS":[0.0,5.0,-5.0],
-            "ROTAT":[0.0,90.0,0.0],
-            "SCALE":[0.01,10.0,10.0]
-        },
-        {
-            "TYPE":"cube",
-            "MATERIAL":"diffuse_red",
-            "TRANS":[-5.0,5.0,0.0],
-            "ROTAT":[0.0,0.0,0.0],
-            "SCALE":[0.01,10.0,10.0]
-        },
-        {
-            "TYPE":"cube",
-            "MATERIAL":"diffuse_green",
-            "TRANS":[5.0,5.0,0.0],
-            "ROTAT":[0.0,0.0,0.0],
-            "SCALE":[0.01,10.0,10.0]
-        },
-        {
-            "TYPE":"sphere",
-            "MATERIAL":"pbr",
-            "TRANS":[-1.0,4.0,-1.0],
-            "ROTAT":[0.0,0.0,0.0],
-            "SCALE":[3.0,3.0,3.0]
+            "SCALE":[100.0,0.01,100.0]
         },
 		{
             "TYPE":"mesh",
-            "MATERIAL":"fox",
-            "TRANS":[2.0,0.01,1.0],
-            "ROTAT":[0.0,-45.0,0.0],
-            "SCALE":[0.06, 0.06, 0.06],
-			"PATH":"../scenes/meshes/Fox/Fox.gltf"
+            "MATERIAL":["trophy", "trophybase"],
+            "TRANS":[0.0,-5.55,0.0],
+            "ROTAT":[0.0,0.0,0.0],
+            "SCALE":[0.35, 0.35, 0.35],
+			"PATH":"../scenes/meshes/Trophy/scene.gltf"
         }
     ]
 }

@@ -128,10 +128,13 @@ void Scene::loadFromJSON(const std::string& jsonName)
             return true; // We either don't need it, or do and it exists.
         };
 
-        if (!TryLoadAssignTexture("DIFFUSE_MAP", textures, newMaterial.diffuseTexId))
+        if (!TryLoadAssignTexture("DIFFUSE", textures, newMaterial.diffuseTexId))
             continue;
 
-        if (!TryLoadAssignTexture("NORMAL_MAP", textures, newMaterial.normalTexId))
+        if (!TryLoadAssignTexture("NORMAL", textures, newMaterial.normalTexId))
+            continue;
+
+        if (!TryLoadAssignTexture("METALLIC_ROUGHNESS", textures, newMaterial.metallicRoughTexId))
             continue;
 
         MatNameToID[name] = materials.size();

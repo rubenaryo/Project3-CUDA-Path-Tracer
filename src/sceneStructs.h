@@ -141,7 +141,6 @@ struct MeshData // SoA
         indices.insert(indices.end(), other.indices.begin(), other.indices.end());
     }
 
-    // TODO: Set some initial size that is reasonable
     std::vector<glm::vec3> vertices;
     std::vector<glm::vec3> normals;
     std::vector<glm::vec2> uvs;
@@ -183,6 +182,7 @@ struct Material
 
     int diffuseTexId = -1;
     int normalTexId = -1;
+    int metallicRoughTexId = -1;
 };
 
 struct HostTextureHandle

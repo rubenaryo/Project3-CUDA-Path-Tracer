@@ -50,6 +50,19 @@ inline __device__ glm::vec4 TextureSample(cudaTextureObject_t texObj, const glm:
     return glm::vec4(color.x, color.y, color.z, color.w);
 }
 
+inline __device__ glm::vec4 TryTextureSample(cudaTextureObject_t* texObjArr, int textureId, const glm::vec2& uv, const glm::vec4& fallbackValue)
+{
+    if (textureId == -1)
+        return fallbackValue;
+
+    return TextureSample(texObjArr[textureId], uv);
+}
+
+inline __device__ glm::vec3 TryTextureSample(cudaTextureObject_t* texObjArr, int textureId, const glm::vec2& uv, const glm::vec3& fallbackValue)
+{
+    return glm::vec3(TryTextureSample(texObjArr, textureId, uv, glm::vec4(fallbackValue, 0.0f)));
+}
+
 ////////////////////////
 // PBR Utils (Mostly from 561)
 
@@ -250,14 +263,9 @@ inline __device__ glm::vec3 Sample_f_specular(const glm::vec3& albedo, const glm
     return f_spec(albedo, out_wiW, norW);
 }
 
-__device__ glm::vec3 Sample_f_cookTorrance(const Material& mat, const glm::vec3& woW, const glm::vec3& norW, thrust::default_random_engine& rng, glm::vec3& out_wiW, float& out_pdf)
+__device__ glm::vec3 Sample_f_cookTorrance(const glm::vec3& albedo, const glm::vec3& woW, const glm::vec3& norW, float metallic, float roughness, thrust::default_random_engine& rng, glm::vec3& out_wiW, float& out_pdf)
 {
-    // TODO: These should come from textures
-    const glm::vec3 ALBEDO = mat.color;
-    float metallic = mat.metallic;
-    float roughness = mat.roughness;
-
-    glm::vec3 F0 = glm::mix(glm::vec3(0.04f), ALBEDO, metallic);
+    glm::vec3 F0 = glm::mix(glm::vec3(0.04f), albedo, metallic);
 
     float NdotWo = glm::max(glm::dot(woW, norW), 0.0f);
     glm::vec3 F = fresnelSchlickRoughness(NdotWo, F0, roughness);
@@ -303,7 +311,7 @@ __device__ glm::vec3 Sample_f_cookTorrance(const Material& mat, const glm::vec3&
 
     out_wiW = wiW;
     out_pdf = pdf;
-    return f_cookTorrance(ALBEDO, norW, woW, wiW, roughness, metallic);
+    return f_cookTorrance(albedo, norW, woW, wiW, roughness, metallic);
 }
 
 __device__ bool SolveDirectLighting(const SceneData& sd, ShadeableIntersection isect, glm::vec3 view_point, thrust::default_random_engine& rng, glm::vec3& out_radiance, glm::vec3& out_wiW, float& out_pdf)
@@ -514,13 +522,26 @@ __global__ void skMicrofacetPBR(ShadeKernelArgs args)
     glm::vec3 thisBounceRadiance(0.0f); // Comes from direct lighting only
 
     const glm::vec3 ERROR_COLOR(1.0f, 0.4118f, 0.7059f);
+    const glm::vec4 metallicRoughFallback(material.metallic, material.roughness, 0.0f, 0.0f);
 
-    glm::vec3 norW = intersection.surfaceNormal;
     glm::vec3 woW = -path.ray.direction;
-    glm::vec3 wiW;
+
+    glm::vec3 albedo = TryTextureSample(args.textures, material.diffuseTexId, intersection.uv, ERROR_COLOR);
+    glm::vec3 norW = TryTextureSample(args.textures, material.normalTexId, intersection.uv, intersection.surfaceNormal);
+    glm::vec4 metallicRough = TryTextureSample(args.textures, material.metallicRoughTexId, intersection.uv, metallicRoughFallback);
+
+    //norW = intersection.surfaceNormal;
+    //albedo = material.color;
+    //metallicRough = metallicRoughFallback;
+
+    float metallic = metallicRough.x;
+    float roughness = metallicRough.y;
+
+    metallic = 1.0f;
     
+    glm::vec3 wiW;
     float pdf;
-    glm::vec3 bsdf = Sample_f_cookTorrance(material, woW, norW, rng, wiW, pdf);
+    glm::vec3 bsdf = Sample_f_cookTorrance(albedo, woW, norW, metallic, roughness, rng, wiW, pdf);
     if (pdf < FLT_EPSILON)
     {
         // Something went wrong, terminate
@@ -528,9 +549,9 @@ __global__ void skMicrofacetPBR(ShadeKernelArgs args)
         return;
     }
 
-    bsdf = glm::min(bsdf, glm::vec3(1.0f));
+    bsdf = glm::clamp(bsdf, glm::vec3(0.0f), glm::vec3(1.0f));
 
-    assert(bsdf.x > 0 && bsdf.y > 0 && bsdf.z > 0);
+    //assert(bsdf.x > 0 && bsdf.y > 0 && bsdf.z > 0);
     assert(!isnanVec3(bsdf));
 
     glm::vec3 directRadiance;
