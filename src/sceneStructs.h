@@ -11,6 +11,7 @@
 
 #define STREAM_COMPACTION 1
 #define MATERIAL_SORT 1
+#define SORT_BY_ZIP_ITERATOR 0
 #define STOCHASTIC_AA 1
 #define USE_BVH 1
 
@@ -284,7 +285,7 @@ struct ShadeableIntersection
   float t;
   glm::vec3 surfaceNormal;
   glm::vec2 uv;
-  MaterialSortKey matSortKey;
+  MaterialSortKey matSortKey = SORTKEY_INVALID;
   int hitGeomIdx = -1;
 };
 
