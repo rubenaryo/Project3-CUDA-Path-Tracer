@@ -83,7 +83,10 @@ static glm::vec3* dev_image = NULL;
 static Geom* dev_geoms = NULL;
 static Material* dev_materials = NULL;
 static Light* dev_lights = NULL;
-static Mesh* dev_meshes = NULL;
+static glm::vec3* dev_vertices = NULL;
+static glm::vec3* dev_normals = NULL;
+static glm::vec2* dev_uvs = NULL;
+static glm::uvec3* dev_indices = NULL;
 static BVHNode* dev_bvhNodes = NULL;
 
 int pathBufferIdx = 0;
@@ -211,9 +214,19 @@ void pathtraceInit(Scene* scene)
 
     cudaMalloc(&dev_lights, scene->lights.size() * sizeof(Light));
     cudaMemcpy(dev_lights, scene->lights.data(), scene->lights.size() * sizeof(Light), cudaMemcpyHostToDevice);
+    
+    // Copy over master mesh data
+    {
+        cudaMalloc(&dev_vertices, scene->masterMeshData.vertices.size() * sizeof(glm::vec3));
+        cudaMalloc(&dev_normals, scene->masterMeshData.normals.size() * sizeof(glm::vec3));
+        cudaMalloc(&dev_uvs, scene->masterMeshData.uvs.size() * sizeof(glm::vec2));
+        cudaMalloc(&dev_indices, scene->masterMeshData.indices.size() * sizeof(glm::uvec3));
 
-    cudaMalloc(&dev_meshes, scene->deviceMeshes.size() * sizeof(Mesh)); // Only support one mesh for now.
-    cudaMemcpy(dev_meshes, scene->deviceMeshes.data(), scene->deviceMeshes.size() * sizeof(Mesh), cudaMemcpyHostToDevice);
+        cudaMemcpy(dev_vertices, scene->masterMeshData.vertices.data(), scene->masterMeshData.vertices.size() * sizeof(glm::vec3), cudaMemcpyHostToDevice);
+        cudaMemcpy(dev_normals, scene->masterMeshData.normals.data(), scene->masterMeshData.normals.size() * sizeof(glm::vec3), cudaMemcpyHostToDevice);
+        cudaMemcpy(dev_uvs, scene->masterMeshData.uvs.data(), scene->masterMeshData.uvs.size() * sizeof(glm::vec2), cudaMemcpyHostToDevice);
+        cudaMemcpy(dev_indices, scene->masterMeshData.indices.data(), scene->masterMeshData.indices.size() * sizeof(glm::uvec3), cudaMemcpyHostToDevice);
+    }
 
     cudaMalloc(&dev_bvhNodes, scene->bvhNodes.size() * sizeof(BVHNode));
     cudaMemcpy(dev_bvhNodes, scene->bvhNodes.data(), scene->bvhNodes.size() * sizeof(BVHNode), cudaMemcpyHostToDevice);
@@ -242,7 +255,10 @@ void pathtraceFree()
     cudaFree(dev_geoms);
     cudaFree(dev_materials);
     cudaFree(dev_lights);
-    cudaFree(dev_meshes);
+    cudaFree(dev_vertices);
+    cudaFree(dev_normals);
+    cudaFree(dev_uvs);
+    cudaFree(dev_indices);
     cudaFree(dev_bvhNodes);
     cudaFree(dev_intersections[0]);
     cudaFree(dev_intersections[1]);
@@ -518,8 +534,14 @@ void pathtrace(uchar4* pbo, int frame, int iter)
     sd.geoms_size = hst_scene->geoms.size();
     sd.lights = dev_lights;
     sd.lights_size = hst_scene->lights.size();
-    sd.meshes = dev_meshes;
-    sd.meshes_size = hst_scene->deviceMeshes.size();
+    sd.vertices = dev_vertices;
+    sd.vertices_size = hst_scene->masterMeshData.vertices.size();
+    sd.normals = dev_normals;
+    sd.normals_size = hst_scene->masterMeshData.normals.size();
+    sd.uvs = dev_uvs;
+    sd.uvs_size = hst_scene->masterMeshData.uvs.size();
+    sd.indices = dev_indices;
+    sd.indices_size = hst_scene->masterMeshData.indices.size();
     sd.bvhNodes = dev_bvhNodes;
     sd.bvhNodes_size = hst_scene->bvhNodes.size();
 

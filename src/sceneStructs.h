@@ -110,74 +110,8 @@ struct Geom
     glm::mat4 transform;
     glm::mat4 inverseTransform;
     glm::mat4 invTranspose;
-    int meshId = -1;
-};
-
-struct Mesh
-{
-    glm::vec3*  vtx = nullptr;
-    glm::vec3*  nor = nullptr;
-    glm::vec2*  uvs = nullptr;
-    glm::uvec3* idx = nullptr;
-
-    uint32_t vtx_count = 0;
-    uint32_t nor_count = 0;
-    uint32_t uvs_count = 0;
-    uint32_t tri_count = 0;
-
-    uint32_t bvh_root_idx = 0;
-    bool isDevice = false;
-
-    __host__ void allocate(uint32_t v, uint32_t n, uint32_t u, uint32_t t)
-    {
-        isDevice = false;
-
-        vtx_count = v;
-        nor_count = n;
-        uvs_count = u;
-        tri_count = t;
-
-        if (v) vtx = (glm::vec3*) malloc(sizeof(glm::vec3)  * vtx_count);
-        if (n) nor = (glm::vec3*) malloc(sizeof(glm::vec3)  * nor_count);
-        if (u) uvs = (glm::vec2*) malloc(sizeof(glm::vec2)  * uvs_count);
-        if (t) idx = (glm::uvec3*)malloc(sizeof(glm::uvec3) * tri_count);
-    }
-
-    __host__ void cleanup()
-    {
-        if (vtx) free(vtx);
-        if (nor) free(nor);
-        if (uvs) free(uvs);
-        if (idx) free(idx);
-    }
-
-    __host__ void deviceAllocate(uint32_t v, uint32_t n, uint32_t u, uint32_t t)
-    {
-        isDevice = true;
-
-        vtx_count = v;
-        nor_count = n;
-        uvs_count = u;
-        tri_count = t;
-
-        if (v) cudaMalloc(&vtx, sizeof(glm::vec3)  * vtx_count);
-        if (n) cudaMalloc(&nor, sizeof(glm::vec3)  * nor_count);
-        if (u) cudaMalloc(&uvs, sizeof(glm::vec2)  * uvs_count);
-        if (t) cudaMalloc(&idx, sizeof(glm::uvec3) * tri_count);
-    }
-
-    __host__ void deviceCleanup()
-    {
-        if (vtx) cudaFree(vtx);
-        if (nor) cudaFree(nor);
-        if (uvs) cudaFree(uvs);
-        if (idx) cudaFree(idx);
-    }
-};
-
-struct Triangle
-{
-    glm::vec3 v[3];
+    
+    uint32_t bvhRootIdx;
 };
 
 struct AABB
@@ -185,6 +119,33 @@ struct AABB
     glm::vec3 min = glm::vec3(FLT_MAX);
     glm::vec3 max = glm::vec3(-FLT_MAX);
     glm::vec3 centre = glm::vec3(0.0f);
+};
+
+struct MeshData // SoA
+{
+    MeshData() = default;
+
+    MeshData(size_t expectedVertCount)
+    {
+        vertices.reserve(expectedVertCount);
+        normals.reserve(expectedVertCount);
+        uvs.reserve(expectedVertCount);
+        indices.reserve(expectedVertCount);
+    }
+
+    void Append(MeshData& other)
+    {
+        vertices.insert(vertices.end(), other.vertices.begin(), other.vertices.end());
+        normals.insert(normals.end(), other.normals.begin(), other.normals.end());
+        uvs.insert(uvs.end(), other.uvs.begin(), other.uvs.end());
+        indices.insert(indices.end(), other.indices.begin(), other.indices.end());
+    }
+
+    // TODO: Set some initial size that is reasonable
+    std::vector<glm::vec3> vertices;
+    std::vector<glm::vec3> normals;
+    std::vector<glm::vec2> uvs;
+    std::vector<glm::uvec3> indices;
 };
 
 struct BVHNode
@@ -294,11 +255,18 @@ struct BVHIntersectResult
 struct SceneData
 {
     Geom* geoms;
-    int geoms_size;
-    Mesh* meshes;
-    int meshes_size;
+    glm::vec3* vertices;
+    glm::vec3* normals;
+    glm::vec2* uvs;
+    glm::uvec3* indices;
     Light* lights;
-    int lights_size;
     BVHNode* bvhNodes;
+
+    int geoms_size;
+    int vertices_size;
+    int normals_size;
+    int uvs_size;
+    int indices_size;
+    int lights_size;
     int bvhNodes_size;
 };

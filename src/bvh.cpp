@@ -57,7 +57,7 @@ void SwapTri(uint32_t iA, uint32_t iB, T* data)
 #define MIN_TRIS_PER_LEAF 4
 static int maxDepthTest = -1;
 
-__host__ void Split(uint32_t parentIdx, std::vector<BVHNode>& allNodes, Mesh& mesh, int depth)
+__host__ void Split(uint32_t parentIdx, std::vector<BVHNode>& allNodes, MeshData& masterMeshData, int depth)
 {
     maxDepthTest = std::max(maxDepthTest, depth);
     if (depth >= BVH_MAX_DEPTH)
@@ -86,15 +86,15 @@ __host__ void Split(uint32_t parentIdx, std::vector<BVHNode>& allNodes, Mesh& me
     const uint32_t maxTriIdx = (uint32_t)parentTriIndex + parentTriCount;
     for (uint32_t triIdx = parentTriIndex; triIdx < maxTriIdx; ++triIdx)
     {
-        glm::uvec3 triIndices = mesh.idx[triIdx];
-        const glm::vec3 v0 = mesh.vtx[triIndices.x];
-        const glm::vec3 v1 = mesh.vtx[triIndices.y];
-        const glm::vec3 v2 = mesh.vtx[triIndices.z];
+        glm::uvec3 triIndices = masterMeshData.indices[triIdx];
+        const glm::vec3 v0 = masterMeshData.vertices[triIndices.x];
+        const glm::vec3 v1 = masterMeshData.vertices[triIndices.y];
+        const glm::vec3 v2 = masterMeshData.vertices[triIndices.z];
         const glm::vec3 centroid = GetTriCentroid(v0, v1, v2);
 
         bool isSideA = centroid[splitAxis] < splitPos;
         BVHNode& child = isSideA ? childA : childB;
-        GrowAABBIndexed(&mesh.idx[triIdx], mesh.vtx, 1, mesh.vtx_count, child.bounds);
+        GrowAABBIndexed(&masterMeshData.indices[triIdx], masterMeshData.vertices.data(), 1, masterMeshData.vertices.size(), child.bounds);
         //GrowAABB(mesh.vtx + vertIdx, 3, child.bounds);
 
         child.triCount++;
@@ -103,8 +103,8 @@ __host__ void Split(uint32_t parentIdx, std::vector<BVHNode>& allNodes, Mesh& me
         {
             int32_t swapTriIdx = childA.triIndex + childA.triCount - 1;
             
-            mesh.idx[triIdx] = mesh.idx[swapTriIdx];
-            mesh.idx[swapTriIdx] = triIndices;
+            masterMeshData.indices[triIdx] = masterMeshData.indices[swapTriIdx];
+            masterMeshData.indices[swapTriIdx] = triIndices;
             
             // SwapTri<glm::vec3>(vertIdx, swapVertIdx, mesh.vtx);
             //SwapTri<glm::vec2>(vertIdx, swapVertIdx, mesh.uvs);
@@ -118,36 +118,32 @@ __host__ void Split(uint32_t parentIdx, std::vector<BVHNode>& allNodes, Mesh& me
         allNodes[parentIdx].childIndex = childAIdx;
         allNodes.push_back(childA);
         allNodes.push_back(childB);
-        Split(childAIdx, allNodes, mesh, depth + 1);
-        Split(childBIdx, allNodes, mesh, depth + 1);
+        Split(childAIdx, allNodes, masterMeshData, depth + 1);
+        Split(childBIdx, allNodes, masterMeshData, depth + 1);
     }
 }
 
-__host__ bool BuildBVH(Mesh& mesh, std::vector<BVHNode>& allNodes)
+__host__ uint32_t BuildBVH(MeshData& masterMeshData, uint32_t startTriIdx, uint32_t endTriIdx, std::vector<BVHNode>& allNodes)
 {
-    // For sanity, yell if the mesh has a weird number of verts
-    //assert(mesh.vtx_count % 3 == 0);
-    uint32_t totalTriCount = mesh.tri_count;
+    assert(endTriIdx > startTriIdx);
+    uint32_t totalTriCount = endTriIdx - startTriIdx;
 
-    // Assume only one mesh in the collection for now.
-    assert(allNodes.empty());
-    allNodes.clear();
     allNodes.reserve(totalTriCount * 2 - 1);
 
     uint32_t rootIdx = allNodes.size();
-    mesh.bvh_root_idx = rootIdx;
+
     allNodes.emplace_back();
     allNodes[rootIdx].triCount = totalTriCount;
-    allNodes[rootIdx].triIndex = 0;
+    allNodes[rootIdx].triIndex = startTriIdx; // The starting position of the root node's triangles within the master index buffer.
 
     // Root node contains the whole mesh
     //GrowAABB(mesh.vtx, mesh.vtx_count, allNodes[rootIdx].bounds);
-    GrowAABBIndexed(mesh.idx, mesh.vtx, mesh.tri_count, mesh.vtx_count, allNodes[rootIdx].bounds);
+    GrowAABBIndexed(masterMeshData.indices.data() + startTriIdx, masterMeshData.vertices.data(), totalTriCount, masterMeshData.vertices.size(), allNodes[rootIdx].bounds);
 
     // Split the root at first
     int depth = 0;
-    Split(mesh.bvh_root_idx, allNodes, mesh, depth);
+    Split(rootIdx, allNodes, masterMeshData, depth);
 
-    allNodes.shrink_to_fit(); // TODO: Remove this once we add support for more than one mesh.
-    return true;
+    allNodes.shrink_to_fit();
+    return rootIdx;
 }

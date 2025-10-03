@@ -35,40 +35,10 @@ Scene::Scene(string filename)
 
 Scene::~Scene()
 {
-    int meshCount = meshes.size();
-    for (int m = 0; m != meshCount; ++m)
-    {
-        meshes.at(m).cleanup();
-        deviceMeshes.at(m).deviceCleanup();
-    }
-
     for (HostTextureHandle& h : textures)
     {
         if (h.texObj)
             cudaDestroyTextureObject(h.texObj);
-    }
-}
-
-void Scene::InitDeviceMeshes()
-{
-    int meshCount = meshes.size();
-    for (int m = 0; m != meshCount; ++m)
-    {
-        const Mesh& hostMesh = meshes.at(m);
-        Mesh& deviceMesh = deviceMeshes.emplace_back();
-        deviceMesh.bvh_root_idx = hostMesh.bvh_root_idx;
-
-        uint32_t v = hostMesh.vtx_count;
-        uint32_t n = hostMesh.nor_count;
-        uint32_t u = hostMesh.uvs_count;
-        uint32_t t = hostMesh.tri_count;
-
-        deviceMesh.deviceAllocate(v, n, u, t);
-
-        if (v) cudaMemcpy(deviceMesh.vtx, hostMesh.vtx, v * sizeof(glm::vec3), cudaMemcpyHostToDevice);
-        if (n) cudaMemcpy(deviceMesh.nor, hostMesh.nor, n * sizeof(glm::vec3), cudaMemcpyHostToDevice);
-        if (u) cudaMemcpy(deviceMesh.uvs, hostMesh.uvs, u * sizeof(glm::vec2), cudaMemcpyHostToDevice);
-        if (t) cudaMemcpy(deviceMesh.idx, hostMesh.idx, t * sizeof(glm::uvec3), cudaMemcpyHostToDevice);
     }
 }
 
@@ -173,19 +143,19 @@ void Scene::loadFromJSON(const std::string& jsonName)
         Geom newGeom = {};
         int geomId = geoms.size();
 
-        MaterialID matId = MATERIALID_INVALID;
-        auto findIt = MatNameToID.find(p["MATERIAL"]);
-        if (findIt == MatNameToID.end())
+        MaterialID matId = 0;
+
+        if (!p["MATERIAL"].is_array()) // Legacy default case, just a raw string
         {
-            // Material not found. Just assign the first material.
-            matId = 0;
-        }
-        else
-        {
-            matId = findIt->second;
-            assert(matId < materials.size());
+            auto findIt = MatNameToID.find(p["MATERIAL"]);
+            if (findIt != MatNameToID.end())
+            {
+                matId = findIt->second;
+                assert(matId < materials.size());
+            }
         }
 
+        // If a mesh has multiple materials, this will be redone later
         const Material& mat = materials.at(matId);
         newGeom.matSortKey = BuildSortKey(mat.type, matId);
 
@@ -215,23 +185,35 @@ void Scene::loadFromJSON(const std::string& jsonName)
         }
         else if (type == "mesh")
         {
-            // Only support one mesh for now
-            if (!meshes.empty())
-                continue;
-
             newGeom.type = GT_MESH;
             const auto& relPath = p["PATH"];
-            int meshId = loadGLTF(relPath, meshes);
 
-            if (meshId == -1)
-                continue; // Mesh loading failed. Don't add it.
+            std::vector<std::string> materialsRequested = p.at("MATERIAL").get<std::vector<std::string>>();
+            std::vector<MaterialID> materialIdsRequested;
+            materialIdsRequested.reserve(materialsRequested.size());
+            for (const std::string& matStr : materialsRequested)
+            {
+                MaterialID result = 0;
+                auto findIt = MatNameToID.find(matStr);
+                if (findIt != MatNameToID.end())
+                {
+                    result = findIt->second;
+                    assert(result < materials.size());
+                }
+                materialIdsRequested.push_back(result);
+            }
 
-            Mesh& mesh = meshes.at(meshId);
-            bool bvhSuccess = BuildBVH(mesh, bvhNodes);
-            if (!bvhSuccess)
-                printf("BuildBVH failure for %s!\n", std::string(relPath).c_str());
+            bool loadSuccess = loadGLTF(relPath, materialIdsRequested, newGeom);
+            if (!loadSuccess)
+            {
+                std::string relPathStr = relPath;
+                printf("Critical Error: Failed to load GLTF at %s!\n", relPathStr.c_str());
+                return;
+            }
 
-            newGeom.meshId = meshId;
+            // Mesh shaped lights are not supported. We're done here.
+            // The resulting Geoms from this should have been created inside loadGLTF.
+            continue;
         }
 
         // This is also an area light.
@@ -320,7 +302,7 @@ std::vector<T> getBufferData(const tinygltf::Model& model, int accessorIndex)
 }
 
 // Returns mesh id
-__host__ int loadGLTF(const std::string& relPath, std::vector<Mesh>& meshes)
+__host__ bool Scene::loadGLTF(const std::string& relPath, const std::vector<MaterialID>& materialIdsRequested, Geom geomTemplate)
 {
     tinygltf::Model model;
     tinygltf::TinyGLTF loader;
@@ -336,19 +318,28 @@ __host__ int loadGLTF(const std::string& relPath, std::vector<Mesh>& meshes)
 
     if (!result) {
         std::cerr << "Failed to load glTF: " << absolutePath << std::endl;
-        return -1;
+        return false;
     }
 
-    // Collect all mesh data
-    std::vector<glm::vec3> allVertices, allNormals;
-    std::vector<glm::vec2> allUVs;
-    std::vector<glm::uvec3> allIndices;
+    assert(materialIdsRequested.size() < model.materials.size());
+
+    int numMaterials = materialIdsRequested.size();
+    std::vector<MeshData> materialToMeshData;
+    materialToMeshData.resize(numMaterials);
+
     uint32_t vertexOffset = 0;
 
     for (const auto& mesh : model.meshes) {
         for (const auto& primitive : mesh.primitives) {
 
-            if (primitive.material > 1) continue; // TEMP: Only do the trophy and base for now
+            if (primitive.material >= numMaterials) continue; // This material index is greater than what we requested.
+
+            MeshData& meshData = materialToMeshData.at(primitive.material);
+
+            std::vector<glm::vec3>&  allVertices = meshData.vertices;
+            std::vector<glm::vec3>&  allNormals = meshData.normals;
+            std::vector<glm::vec2>&  allUVs = meshData.uvs;
+            std::vector<glm::uvec3>& allIndices = meshData.indices;
 
             // Load vertices
             std::vector<glm::vec3> vertices;
@@ -399,38 +390,29 @@ __host__ int loadGLTF(const std::string& relPath, std::vector<Mesh>& meshes)
         }
     }
 
-    if (allVertices.empty()) return -1;
+    // TODO: Handle non-indexed meshes
+    // TODO: Handle meshes with no normals.
 
-    int meshId = meshes.size();
-    Mesh& mesh = meshes.emplace_back();
-
-    // Allocate host memory and copy data
-    uint32_t v = allVertices.size();
-    uint32_t n = allNormals.size();
-    uint32_t u = allUVs.size();
-    uint32_t t = allIndices.size();
-
-    mesh.allocate(v, n, u, t);
-
-    if (v)
+    for (int m = 0; m != numMaterials; ++m)
     {
-        memcpy(mesh.vtx, allVertices.data(), v * sizeof(glm::vec3));
+        // For each material in this file, build a bvh and record as a separate geometry
+        MeshData& meshData = materialToMeshData.at(m);
+        MaterialID matId = materialIdsRequested.at(m);
+        const Material& mat = materials.at(matId);
+
+        assert(!meshData.indices.empty());
+        
+        // Add the mesh data to the master lists
+        uint32_t startIdx = masterMeshData.indices.size();
+        uint32_t endIdx = startIdx + meshData.indices.size();
+        masterMeshData.Append(meshData);
+
+        uint32_t bvhRootIdx = BuildBVH(masterMeshData, startIdx, endIdx, bvhNodes);
+
+        Geom& newGeom = geoms.emplace_back(geomTemplate);
+        newGeom.matSortKey = BuildSortKey(mat.type, matId);
+        newGeom.bvhRootIdx = bvhRootIdx;
     }
 
-    if (n)
-    {
-        memcpy(mesh.nor, allNormals.data(), n * sizeof(glm::vec3));
-    }
-    
-    if (u)
-    {
-        memcpy(mesh.uvs, allUVs.data(), u * sizeof(glm::vec2));
-    }
-
-    if (t)
-    {
-        memcpy(mesh.idx, allIndices.data(), t * sizeof(glm::uvec3));
-    }
-
-    return meshId;
+    return true;
 }
