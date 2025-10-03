@@ -11,6 +11,10 @@ __device__ thrust::default_random_engine makeSeededRandomEngine(int iter, int in
     return thrust::default_random_engine(h);
 }
 
+__host__ __device__ inline bool isnanVec3(const glm::vec3& v) {
+    return isnan(v.x) || isnan(v.y) || isnan(v.z);
+}
+
 inline __device__ void coordinateSystem(const glm::vec3& v1, glm::vec3& v2, glm::vec3& v3)
 {
     if (glm::abs(v1.x) > glm::abs(v1.y))
@@ -69,20 +73,31 @@ __device__ float distributionGGX(const glm::vec3& norW, const glm::vec3& whW, fl
     float denom = (NdotH2 * (a2 - 1.0f) + 1.0f);
     denom = PI * denom * denom;
 
+    if (denom < FLT_EPSILON)
+        return a2;
+
     return a2 / denom;
 }
 
 __device__ glm::vec3 sampleGGX(const glm::vec3& norW, float roughness, thrust::default_random_engine& rng) {
     
     thrust::uniform_real_distribution<float> u01(0.0f, 1.0f);
+
+    float u1 = u01(rng);
+    float u2 = u01(rng);
     
     float a = roughness * roughness;
     float a2 = a * a;
 
+    float phi = 2.0f * PI * u1;
+
     // Spherical coords
-    float phi = 2.0f * PI * u01(rng);
-    float cosTheta = sqrt((1.0f - u01(rng)) / (1.0f + (a2 - 1.0f) * u01(rng)));
-    float sinTheta = sqrt(1.0f - cosTheta * cosTheta);
+    float tanTheta2 = a2 * u2 / (1.0f - u2 + FLT_EPSILON);
+    float cosTheta = 1.0f / sqrt(1.0f + tanTheta2);
+    float sinTheta = sqrt(glm::max(0.0f, 1.0f - cosTheta * cosTheta));
+
+    if (isnan(cosTheta) || isnan(sinTheta))
+        int stub = 42;
 
     // Cartesian
     glm::vec3 H;
@@ -95,7 +110,15 @@ __device__ glm::vec3 sampleGGX(const glm::vec3& norW, float roughness, thrust::d
     glm::vec3 tangent = glm::normalize(glm::cross(up, norW));
     glm::vec3 bitangent = glm::cross(norW, tangent);
 
-    return glm::normalize(tangent * H.x + bitangent * H.y + norW * H.z);
+    glm::vec3 result = glm::normalize(tangent * H.x + bitangent * H.y + norW * H.z);
+
+    if (isnanVec3(result))
+    {
+        int stub = 42;
+    }
+
+
+    return result;
 }
 
 // Smith's Geometry function with GGX (Schlick-GGX)
@@ -125,8 +148,15 @@ __device__ float squareToHemisphereCosinePDF(const glm::vec3& sampleL)
 __device__ float pdfGGX(const glm::vec3& norW, const glm::vec3& whW, const glm::vec3& woW, float roughness) {
     float HdotN  = glm::max(glm::dot(whW, norW), 0.0f);
     float HdotWo = glm::max(glm::dot(whW, woW), 0.0f);
-
+    
     float D = distributionGGX(norW, whW, roughness);
+    //if (HdotN < FLT_EPSILON)
+    //    HdotN = 1.0f;
+
+    if (HdotWo < FLT_EPSILON)
+        HdotWo = 1.0f;
+
+
     return (D * HdotN) / (4.0f * HdotWo);
 }
 
@@ -139,6 +169,9 @@ __device__ float pdfCookTorrance(const glm::vec3& norW, const glm::vec3& whW, co
 
     float pdfSpec = pdfGGX(norW, whW, woW, roughness);
     float pdfDiff = glm::max(glm::dot(norW, wiW), 0.0f) * INV_PI;
+
+    if (isnan(pdfSpec) || isnan(pdfDiff) || isnan(specularWeight))
+        int stub = 42;
 
     return glm::mix(pdfDiff, pdfSpec, specularWeight);
 }
@@ -154,8 +187,12 @@ __device__ float Pdf(MaterialType matType, glm::vec3 norW, glm::vec3 woW, glm::v
     {
     case MT_DIFFUSE:
         return squareToHemisphereCosinePDF(wi);
-    case MT_SPECULAR:
     case MT_MICROFACET_PBR:
+    {
+        //glm::vec3 whW = glm::normalize(woW + wiW);
+        //return pdfCookTorrance(norW, whW, woW, wiW, 0.1f, 0.1f);
+    }
+    case MT_SPECULAR:
         return 0.0f; // Spec goes directly to the light, and refractive goes into the material.
     }
 
@@ -185,10 +222,6 @@ inline __device__ glm::vec3 f_cookTorrance(const glm::vec3& albedo, const glm::v
 
     float NdotWo = glm::max(glm::dot(norW, woW), 0.0f);
     float NdotWi = glm::max(glm::dot(norW, wiW), 0.0f);
-
-    if (NdotWo <= 0.0f || NdotWi <= 0.0f) {
-        return glm::vec3(0.0f);
-    }
 
     glm::vec3 F0 = glm::mix(glm::vec3(0.04f), albedo, metallic);
 
@@ -226,28 +259,34 @@ inline __device__ glm::vec3 Sample_f_specular(const glm::vec3& albedo, const glm
     return f_spec(albedo, out_wiW, norW);
 }
 
+#define ROUGHNESS 0.5f
+#define METALLIC 1.0f
+
 __device__ glm::vec3 Sample_f_cookTorrance(const Material& mat, const glm::vec3& woW, const glm::vec3& norW, thrust::default_random_engine& rng, glm::vec3& out_wiW, float& out_pdf)
 {
     // TODO: These should come from textures
-    const float METALLIC = 1.0f;
-    const float ROUGHNESS = 0.0f;
     const glm::vec3 ALBEDO = mat.color;
 
     glm::vec3 F0 = glm::mix(glm::vec3(0.04f), ALBEDO, METALLIC);
 
-    float VdotN = glm::max(glm::dot(woW, norW), 0.0f);
-    glm::vec3 F = fresnelSchlick(VdotN, F0);
+    float NdotWo = glm::max(glm::dot(woW, norW), 0.0f);
+    glm::vec3 F = fresnelSchlick(NdotWo, F0);
     float specWeight = (F.x + F.y + F.z) / 3.0f; // Avg of each component, used to choose between spec and diffuse
 
-    glm::vec3 wiW, whW; // resulting view vector and half vector
+    glm::vec3 wiW(0.0f);
+    glm::vec3 whW(0.0f); // resulting view vector and half vector
 
     thrust::uniform_real_distribution<float> u01(0.0f, 1.0f);
 
     // Choose spec vs diffuse based on random number and spec weight
-    if (u01(rng) < specWeight)
+    float u1 = u01(rng);
+    if (u1 < specWeight)
     {
         whW = sampleGGX(norW, ROUGHNESS, rng);
         wiW = glm::reflect(-woW, whW);
+
+        if (isnanVec3(wiW) || isnanVec3(whW))
+            int stub = 42;
 
         // hemisphere check
         if (glm::dot(wiW, norW) <= 0.0f)
@@ -263,8 +302,12 @@ __device__ glm::vec3 Sample_f_cookTorrance(const Material& mat, const glm::vec3&
         whW = glm::normalize(woW + wiW);
     }
 
+
+    if (isnanVec3(wiW) || isnanVec3(whW))
+        int stub = 42;
+
     float pdf = pdfCookTorrance(norW, whW, woW, wiW, ROUGHNESS, METALLIC);
-    if (pdf < FLT_EPSILON)
+    if (pdf < FLT_EPSILON || isnan(pdf))
     {
         out_pdf = 0.0f;
         return glm::vec3(0.0f);
@@ -485,7 +528,7 @@ __global__ void skMicrofacetPBR(ShadeKernelArgs args)
     const glm::vec3 ERROR_COLOR(1.0f, 0.4118f, 0.7059f);
 
     glm::vec3 norW = intersection.surfaceNormal;
-    glm::vec3 woW = path.ray.direction;
+    glm::vec3 woW = -path.ray.direction;
     glm::vec3 wiW;
     
     float pdf;
@@ -495,6 +538,11 @@ __global__ void skMicrofacetPBR(ShadeKernelArgs args)
         // Something went wrong, terminate
         args.pathSegments[idx].remainingBounces = 0;
         return;
+    }
+
+    if (isnanVec3(bsdf))
+    {
+        int stub = 42;
     }
 
     glm::vec3 directRadiance;
@@ -513,7 +561,9 @@ __global__ void skMicrofacetPBR(ShadeKernelArgs args)
     glm::vec3 throughput = args.pathSegments[idx].throughput;
     if (SolveDirectLighting(args.sceneData, intersection, view_point, rng, directRadiance, wiW_Li, pdf_Li))
     {
-        float bsdf_pdf = Pdf(material.type, intersection.surfaceNormal, -path.ray.direction, wiW_Li);
+        glm::vec3& whW = glm::normalize(woW + wiW_Li);
+
+        float bsdf_pdf = pdfCookTorrance(intersection.surfaceNormal, whW, woW, wiW_Li, ROUGHNESS, METALLIC);
         float lambert_Li = glm::abs(glm::dot(intersection.surfaceNormal, wiW_Li));
 
         // Assemble direct lighting components

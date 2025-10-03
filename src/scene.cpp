@@ -123,6 +123,12 @@ void Scene::loadFromJSON(const std::string& jsonName)
             newMaterial.color = glm::vec3(col[0], col[1], col[2]);
             newMaterial.type = MT_SPECULAR;
         }
+        else if (p["TYPE"] == "MicrofacetPBR")
+        {
+            const auto& col = p["RGB"];
+            newMaterial.color = glm::vec3(col[0], col[1], col[2]);
+            newMaterial.type = MT_MICROFACET_PBR;
+        }
 
         auto TryLoadAssignTexture = [p](const char* attrName, std::vector<HostTextureHandle>& out_handleArr, int& out_id)
         {
