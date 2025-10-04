@@ -325,9 +325,10 @@ __host__ bool Scene::loadGLTF(const std::string& relPath, const std::vector<Mate
         return false;
     }
 
-    assert(materialIdsRequested.size() < model.materials.size());
+    assert(materialIdsRequested.size() <= model.materials.size());
 
     int numMaterials = materialIdsRequested.size();
+
     std::vector<MeshData> materialToMeshData;
     materialToMeshData.resize(numMaterials);
 
@@ -394,8 +395,6 @@ __host__ bool Scene::loadGLTF(const std::string& relPath, const std::vector<Mate
         }
     }
 
-    // TODO: Handle non-indexed meshes
-    // TODO: Handle meshes with no normals.
 
     for (int m = 0; m != numMaterials; ++m)
     {
@@ -404,7 +403,29 @@ __host__ bool Scene::loadGLTF(const std::string& relPath, const std::vector<Mate
         MaterialID matId = materialIdsRequested.at(m);
         const Material& mat = materials.at(matId);
 
-        assert(!meshData.indices.empty());
+        if (meshData.indices.empty()) // Mesh only has vertices.
+        {
+            meshData.indices.reserve(meshData.vertices.size()/3);
+            
+            for (int i = 0; (i+3) < meshData.vertices.size();)
+            {
+                meshData.indices.emplace_back(i++, i++, i++);
+            }
+        }
+
+        bool hasNormals = true;
+        if (meshData.normals.size() < meshData.vertices.size()) // no normals, or not as many
+        {
+            hasNormals = false;
+            meshData.normals.resize(meshData.vertices.size(), glm::vec3(0.0f, 0.0f, 1.0f));
+        }
+
+        bool hasUVs = true;
+        if (meshData.uvs.size() < meshData.vertices.size())
+        {
+            hasUVs = false;
+            meshData.uvs.resize(meshData.vertices.size(), glm::vec2(-1.0f, -1.0f));
+        }
         
         // Add the mesh data to the master lists
         uint32_t startIdx = masterMeshData.indices.size();
@@ -416,6 +437,8 @@ __host__ bool Scene::loadGLTF(const std::string& relPath, const std::vector<Mate
         Geom& newGeom = geoms.emplace_back(geomTemplate);
         newGeom.matSortKey = BuildSortKey(mat.type, matId);
         newGeom.bvhRootIdx = bvhRootIdx;
+        newGeom.hasNormals = hasNormals;
+        newGeom.hasUVs = hasUVs;
     }
 
     return true;

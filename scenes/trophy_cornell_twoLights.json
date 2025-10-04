@@ -1,4 +1,5 @@
 {
+	"Environment":"../scenes/environmentmaps/14-Hamarikyu_Bridge_B_3k.hdr",
     "Materials":
     {
         "light":
@@ -120,7 +121,7 @@
             "TYPE":"mesh",
             "MATERIAL":["trophy", "trophybase"],
             "TRANS":[0.0,-3.9,0.0],
-            "ROTAT":[0.0,-45.0,0.0],
+            "ROTAT":[0.0,0.0,0.0],
             "SCALE":[0.25, 0.25, 0.25],
 			"PATH":"../scenes/meshes/Trophy/scene.gltf"
         }

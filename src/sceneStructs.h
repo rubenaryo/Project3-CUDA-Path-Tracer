@@ -112,6 +112,8 @@ struct Geom
     glm::mat4 invTranspose;
     
     uint32_t bvhRootIdx;
+    bool hasNormals;
+    bool hasUVs;
 };
 
 struct AABB
