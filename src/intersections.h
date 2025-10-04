@@ -49,7 +49,6 @@ __host__ __device__ float intersectAABB(const Ray& ray, const AABB& aabb);
 __host__ __device__ float rectIntersectionTest(const Geom& geom, const Ray& ray, glm::vec3& out_isectPoint, glm::vec3& out_normal, glm::vec2& out_uv);
 __host__ __device__ float boxIntersectionTest(Geom box, Ray r, glm::vec3& intersectionPoint, glm::vec3& normal, bool& outside);
 __host__ __device__ float sphereIntersectionTest(Geom sphere, Ray r, glm::vec3& intersectionPoint, glm::vec3& normal, bool& outside);
-__host__ __device__ float triangleIntersectionTest(Geom tri, Ray r, glm::vec3& intersectionPoint, glm::vec3& normal, bool& outside);
 __host__ __device__ float meshIntersectionTest(Geom meshGeom, const SceneData& sd, Ray r, glm::vec3& intersectionPoint, glm::vec3& normal, glm::vec3& tangent, glm::vec2& uv, bool& outside);
 
 __device__ glm::vec3 sampleEnvironmentMap(cudaTextureObject_t envMap, const glm::vec3& direction);

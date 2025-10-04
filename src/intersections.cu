@@ -14,7 +14,6 @@ __global__ void generateSortKeys(int N, const ShadeableIntersection* isects, Mat
     const ShadeableIntersection isect = isects[idx];
     if (isect.t > FLT_EPSILON)
     {
-        // TODO: maybe instead of using the sortkey buffer we can just sort directly off of this???
         sortKeys[idx] = isect.matSortKey;
     }
     else
@@ -215,13 +214,6 @@ __host__ __device__ float sphereIntersectionTest(
 
     return glm::length(r.origin - intersectionPoint);
 }
-
-__host__ __device__ float triangleIntersectionTest(Geom tri, Ray r, glm::vec3& intersectionPoint, glm::vec3& normal, bool& outside)
-{
-    //bool result = glm::intersectRayTriangle(r.origin, r.direction, )
-    return 0;
-}
-
 
 // From CIS 561
 __host__ __device__ bool intersectRayTriangle_MollerTrumbore(const Ray& ray,
@@ -534,28 +526,19 @@ __device__ void sceneIntersect(PathSegment& path, const SceneData& sceneData, Sh
     if (hit_geom_index == -1)
     {
         result.t = -1.0f;
-        //path.throughput = glm::vec3(0.0f); // This gmem read might be really bad.
         if (envMaps)
         {
             path.throughput *= sampleEnvironmentMap(envMaps[0], pathCopy.ray.direction);
-            path.Lo += path.throughput;
         }
         else
         {
             path.throughput *= glm::vec3(0.0f);
-            //path.Lo += path.throughput;
         }
+        path.Lo += path.throughput;
     }
     else
     {
         MaterialType matType = GetMaterialTypeFromSortKey(hitMaterialKey);
-        if (matType == MT_EMISSIVE) 
-        {
-            assert(hit_geom_type == GT_RECT);
-
-            // We happened to hit a light.
-            //float rectPDF = 
-        }
 
         // The ray hits something
         result.t = t_min;

@@ -9,6 +9,10 @@
 
 #define BACKGROUND_COLOR (glm::vec3(0.0f))
 
+#define MIN_ROUGHNESS 0.01f
+#define MIN_METALLIC 0.01f
+
+// Testing Toggles
 #define STREAM_COMPACTION 1
 #define MATERIAL_SORT 1
 #define SORT_BY_ZIP_ITERATOR 0

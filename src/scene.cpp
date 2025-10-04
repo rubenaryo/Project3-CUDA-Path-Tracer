@@ -99,9 +99,6 @@ void Scene::loadFromJSON(const std::string& jsonName)
             newMaterial.color = glm::vec3(col[0], col[1], col[2]);
             newMaterial.type = MT_MICROFACET_PBR;
 
-            static const float MIN_ROUGHNESS = 0.01f;
-            static const float MIN_METALLIC = 0.01f;
-
             newMaterial.roughness = glm::clamp((float)p["ROUGHNESS"], MIN_ROUGHNESS, 1.0f);
             newMaterial.metallic  = glm::clamp((float)p["METALLIC"], MIN_METALLIC, 1.0f);
         }
@@ -334,10 +331,12 @@ __host__ bool Scene::loadGLTF(const std::string& relPath, const std::vector<Mate
 
     uint32_t vertexOffset = 0;
 
+    // Grading Note: Used AI Help for this part
     for (const auto& mesh : model.meshes) {
         for (const auto& primitive : mesh.primitives) {
 
-            if (primitive.material >= numMaterials) continue; // This material index is greater than what we requested.
+            if (primitive.material >= numMaterials) 
+                continue; // This material index is greater than what we requested.
 
             MeshData& meshData = materialToMeshData.at(primitive.material);
 
@@ -400,12 +399,18 @@ __host__ bool Scene::loadGLTF(const std::string& relPath, const std::vector<Mate
             vertexOffset += vertices.size();
         }
     }
+    
+    // For building the bvh later
+    std::vector<glm::uvec2> startEndIndices;
+    startEndIndices.resize(materialToMeshData.size());
 
+    uint32_t geomsStart = geoms.size();
 
     for (int m = 0; m != numMaterials; ++m)
     {
         // For each material in this file, build a bvh and record as a separate geometry
         MeshData& meshData = materialToMeshData.at(m);
+        glm::uvec2& startEndIndex = startEndIndices.at(m);
         MaterialID matId = materialIdsRequested.at(m);
         const Material& mat = materials.at(matId);
 
@@ -443,16 +448,24 @@ __host__ bool Scene::loadGLTF(const std::string& relPath, const std::vector<Mate
         // Add the mesh data to the master lists
         uint32_t startIdx = masterMeshData.indices.size();
         uint32_t endIdx = startIdx + meshData.indices.size();
+        startEndIndex.x = startIdx;
+        startEndIndex.y = endIdx;
         masterMeshData.Append(meshData);
-
-        uint32_t bvhRootIdx = BuildBVH(masterMeshData, startIdx, endIdx, bvhNodes);
 
         Geom& newGeom = geoms.emplace_back(geomTemplate);
         newGeom.matSortKey = BuildSortKey(mat.type, matId);
-        newGeom.bvhRootIdx = bvhRootIdx;
         newGeom.hasNormals = hasNormals;
         newGeom.hasTangents = hasTangents;
         newGeom.hasUVs = hasUVs;
+    }
+
+    // Build the BVH in a second pass so that we know all the vertices are loaded.
+    for (int m = 0; m != numMaterials; ++m)
+    {
+        Geom& geom = geoms.at(geomsStart + m);
+        glm::uvec2& startEndIdx = startEndIndices.at(m);
+
+        geom.bvhRootIdx = BuildBVH(masterMeshData, startEndIdx.x, startEndIdx.y, bvhNodes);
     }
 
     return true;

@@ -543,12 +543,11 @@ __global__ void skMicrofacetPBR(ShadeKernelArgs args)
     glm::vec3 view_point = path.ray.origin + intersection.t * path.ray.direction;
     glm::vec3 thisBounceRadiance(0.0f); // Comes from direct lighting only
 
-    const glm::vec3 ERROR_COLOR(1.0f, 0.4118f, 0.7059f);
     const glm::vec4 metallicRoughFallback(material.metallic, material.roughness, 1.0f, 1.0f);
 
     glm::vec3 woW = -path.ray.direction;
 
-    glm::vec3 albedo = TryTextureSample(args.textures, material.diffuseTexId, intersection.uv, ERROR_COLOR);
+    glm::vec3 albedo = TryTextureSample(args.textures, material.diffuseTexId, intersection.uv, material.color);
     glm::vec4 metallicRough = TryTextureSample(args.textures, material.metallicRoughTexId, intersection.uv, metallicRoughFallback);
 
     glm::vec3 norW = intersection.surfaceNormal;
@@ -566,23 +565,15 @@ __global__ void skMicrofacetPBR(ShadeKernelArgs args)
             tangent = -tangent;
         }
 
-        //createCoordinateSystem(norW, tangent, bitangent);
-
         glm::mat3 TBN(tangent, bitangent, norW);
         norW = glm::normalize(TBN * norT);
     }
     
-    
-    //albedo = material.color;
-    //metallicRough = metallicRoughFallback;
-
+    // This assumes the metallic and roughness always go in the same channels as they should
+    // Someone should let the people on sketchfab know....
     float roughness = glm::clamp(metallicRough.g, 0.01f, 1.0f);
     float metallic = glm::clamp(metallicRough.b, 0.01f, 1.0f);
 
-    albedo = material.color;
-    metallic = 1.0f;
-    roughness = 0.1f;
-    
     glm::vec3 wiW;
     float pdf;
     glm::vec3 bsdf = Sample_f_cookTorrance(albedo, woW, norW, metallic, roughness, rng, wiW, pdf);

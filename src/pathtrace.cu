@@ -351,15 +351,6 @@ __global__ void finalGather(int nPaths, glm::vec3* image, PathSegment* iteration
     }
 }
 
-//struct MaterialIdComp {
-//    
-//    using PathIsectTuple = thrust::tuple<PathSegment, ShadeableIntersection>;
-//    
-//    __host__ __device__
-//    bool operator()(const PathIsectTuple& a, const PathIsectTuple& b) const {
-//        return thrust::get<1>(a).materialId < thrust::get<1>(b).materialId;
-//    }
-//};
 struct NonTerminated {
     __host__ __device__
         bool operator()(PathSegment& ps) {
@@ -419,7 +410,6 @@ __host__ int sortByMaterialType(int num_paths)
     // Sort the indices (representing path/isect elements) based on the previously gathered sortkeys
     thrust::sort_by_key(thrust::device, dev_sortKeys, dev_sortKeys + num_paths, dev_sortIndices);
 
-    // 
     thrust::gather(thrust::device, dev_sortIndices, dev_sortIndices + num_paths, dev_paths[src], dev_paths[dst]);
     thrust::gather(thrust::device, dev_sortIndices, dev_sortIndices + num_paths, dev_intersections[src], dev_intersections[dst]);
 
@@ -430,8 +420,7 @@ __host__ int sortByMaterialType(int num_paths)
 
     // This should work instead of memcpy, but doesn't for some reason ...
     //pathBufferIdx = dst;
-
-#endif // 0
+#endif
 
     int numBlocks = utilityCore::divUp(num_paths, BLOCK_SIZE_1D);
 
@@ -491,9 +480,6 @@ __host__ void shadeByMaterialType(int num_paths, int iter, int depth, const Scen
 
 __host__ void shadeLegacy(int num_paths, int iter, int depth)
 {
-    // TODO: compare between directly shading the path segments and shading
-    // path segments that have been reshuffled to be contiguous in memory.
-
     ShadeKernelArgs skArgs = {
           iter
         , num_paths
@@ -514,14 +500,9 @@ __host__ void shadeLegacy(int num_paths, int iter, int depth)
 __host__ int cullTerminatedPaths(int num_paths)
 {
     auto dev_path_end = thrust::partition(thrust::device, dev_paths[pathBufferIdx], dev_paths[pathBufferIdx] + num_paths, NonTerminated());
-    //auto dev_path_end = thrust::remove_if(thrust::device, dev_paths, dev_paths + num_paths, Terminated());
     return dev_path_end - dev_paths[pathBufferIdx];
 }
 
-/**
- * Wrapper for the __global__ call that sets up the kernel calls and does a ton
- * of memory management
- */
 void pathtrace(uchar4* pbo, int frame, int iter)
 {
     const int maxDepth = hst_scene->state.traceDepth;
@@ -564,11 +545,9 @@ void pathtrace(uchar4* pbo, int frame, int iter)
     bool iterationComplete = false;
     while (!iterationComplete)
     {
-        // clean shading chunks
         thrust::fill(thrust::device, dev_intersections[0], dev_intersections[0] + pixelcount, ShadeableIntersection());
         thrust::fill(thrust::device, dev_intersections[1], dev_intersections[1] + pixelcount, ShadeableIntersection());
 
-        // tracing
         dim3 numblocksPathSegmentTracing = (num_paths + BLOCK_SIZE_1D - 1) / BLOCK_SIZE_1D;
         computeIntersections<<<numblocksPathSegmentTracing, BLOCK_SIZE_1D>>> (
             depth,
@@ -590,7 +569,6 @@ void pathtrace(uchar4* pbo, int frame, int iter)
     #if MATERIAL_SORT
         int new_num_paths = sortByMaterialType(num_paths);
         checkCUDAError("sortByMaterialType");
-        // TODO_WAVEFRONT: use new_num_paths to determine how many rays to regenerate.
         num_paths = new_num_paths;
 
         if (num_paths == 0)
@@ -606,7 +584,6 @@ void pathtrace(uchar4* pbo, int frame, int iter)
 
     #if STREAM_COMPACTION
         num_paths = cullTerminatedPaths(num_paths);
-        // TODO_WAVEFRONT: Regenerate paths
     #endif
         iterationComplete = depth >= maxDepth || num_paths == 0;
         depth++;

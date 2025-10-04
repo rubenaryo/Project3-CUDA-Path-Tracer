@@ -29,7 +29,10 @@ __host__ void GrowAABBIndexed(const glm::uvec3* indices, const glm::vec3* vertic
 
         for (int i = 0; i != 3; ++i)
         {
+            if (tri[i] >= vtx_count)
+                int stub = 42;
             assert(tri[i] < vtx_count);
+
             const glm::vec3& vtx = vertices[tri[i]];
             aabb.max = glm::max(aabb.max, vtx);
             aabb.min = glm::min(aabb.min, vtx);
@@ -95,7 +98,6 @@ __host__ void Split(uint32_t parentIdx, std::vector<BVHNode>& allNodes, MeshData
         bool isSideA = centroid[splitAxis] < splitPos;
         BVHNode& child = isSideA ? childA : childB;
         GrowAABBIndexed(&masterMeshData.indices[triIdx], masterMeshData.vertices.data(), 1, masterMeshData.vertices.size(), child.bounds);
-        //GrowAABB(mesh.vtx + vertIdx, 3, child.bounds);
 
         child.triCount++;
 
@@ -106,9 +108,6 @@ __host__ void Split(uint32_t parentIdx, std::vector<BVHNode>& allNodes, MeshData
             masterMeshData.indices[triIdx] = masterMeshData.indices[swapTriIdx];
             masterMeshData.indices[swapTriIdx] = triIndices;
             
-            // SwapTri<glm::vec3>(vertIdx, swapVertIdx, mesh.vtx);
-            //SwapTri<glm::vec2>(vertIdx, swapVertIdx, mesh.uvs);
-
             childB.triIndex++; // Every time we add to childA, we move over the start of childB
         }
     }
@@ -137,7 +136,6 @@ __host__ uint32_t BuildBVH(MeshData& masterMeshData, uint32_t startTriIdx, uint3
     allNodes[rootIdx].triIndex = startTriIdx; // The starting position of the root node's triangles within the master index buffer.
 
     // Root node contains the whole mesh
-    //GrowAABB(mesh.vtx, mesh.vtx_count, allNodes[rootIdx].bounds);
     GrowAABBIndexed(masterMeshData.indices.data() + startTriIdx, masterMeshData.vertices.data(), totalTriCount, masterMeshData.vertices.size(), allNodes[rootIdx].bounds);
 
     // Split the root at first
