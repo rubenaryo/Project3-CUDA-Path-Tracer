@@ -113,6 +113,7 @@ struct Geom
     
     uint32_t bvhRootIdx;
     bool hasNormals;
+    bool hasTangents;
     bool hasUVs;
 };
 
@@ -127,24 +128,18 @@ struct MeshData // SoA
 {
     MeshData() = default;
 
-    MeshData(size_t expectedVertCount)
-    {
-        vertices.reserve(expectedVertCount);
-        normals.reserve(expectedVertCount);
-        uvs.reserve(expectedVertCount);
-        indices.reserve(expectedVertCount);
-    }
-
     void Append(MeshData& other)
     {
         vertices.insert(vertices.end(), other.vertices.begin(), other.vertices.end());
         normals.insert(normals.end(), other.normals.begin(), other.normals.end());
+        tangents.insert(tangents.end(), other.tangents.begin(), other.tangents.end());
         uvs.insert(uvs.end(), other.uvs.begin(), other.uvs.end());
         indices.insert(indices.end(), other.indices.begin(), other.indices.end());
     }
 
     std::vector<glm::vec3> vertices;
     std::vector<glm::vec3> normals;
+    std::vector<glm::vec3> tangents;
     std::vector<glm::vec2> uvs;
     std::vector<glm::uvec3> indices;
 };
@@ -261,6 +256,7 @@ struct SceneData
     Geom* geoms;
     glm::vec3* vertices;
     glm::vec3* normals;
+    glm::vec3* tangents;
     glm::vec2* uvs;
     glm::uvec3* indices;
     Light* lights;
@@ -269,6 +265,7 @@ struct SceneData
     int geoms_size;
     int vertices_size;
     int normals_size;
+    int tangents_size;
     int uvs_size;
     int indices_size;
     int lights_size;

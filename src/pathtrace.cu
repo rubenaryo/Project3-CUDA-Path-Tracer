@@ -85,6 +85,7 @@ static Material* dev_materials = NULL;
 static Light* dev_lights = NULL;
 static glm::vec3* dev_vertices = NULL;
 static glm::vec3* dev_normals = NULL;
+static glm::vec3* dev_tangents = NULL;
 static glm::vec2* dev_uvs = NULL;
 static glm::uvec3* dev_indices = NULL;
 static BVHNode* dev_bvhNodes = NULL;
@@ -220,11 +221,13 @@ void pathtraceInit(Scene* scene)
     {
         cudaMalloc(&dev_vertices, scene->masterMeshData.vertices.size() * sizeof(glm::vec3));
         cudaMalloc(&dev_normals, scene->masterMeshData.normals.size() * sizeof(glm::vec3));
+        cudaMalloc(&dev_tangents, scene->masterMeshData.tangents.size() * sizeof(glm::vec3));
         cudaMalloc(&dev_uvs, scene->masterMeshData.uvs.size() * sizeof(glm::vec2));
         cudaMalloc(&dev_indices, scene->masterMeshData.indices.size() * sizeof(glm::uvec3));
 
         cudaMemcpy(dev_vertices, scene->masterMeshData.vertices.data(), scene->masterMeshData.vertices.size() * sizeof(glm::vec3), cudaMemcpyHostToDevice);
         cudaMemcpy(dev_normals, scene->masterMeshData.normals.data(), scene->masterMeshData.normals.size() * sizeof(glm::vec3), cudaMemcpyHostToDevice);
+        cudaMemcpy(dev_tangents, scene->masterMeshData.tangents.data(), scene->masterMeshData.tangents.size() * sizeof(glm::vec3), cudaMemcpyHostToDevice);
         cudaMemcpy(dev_uvs, scene->masterMeshData.uvs.data(), scene->masterMeshData.uvs.size() * sizeof(glm::vec2), cudaMemcpyHostToDevice);
         cudaMemcpy(dev_indices, scene->masterMeshData.indices.data(), scene->masterMeshData.indices.size() * sizeof(glm::uvec3), cudaMemcpyHostToDevice);
     }
@@ -258,6 +261,7 @@ void pathtraceFree()
     cudaFree(dev_lights);
     cudaFree(dev_vertices);
     cudaFree(dev_normals);
+    cudaFree(dev_tangents);
     cudaFree(dev_uvs);
     cudaFree(dev_indices);
     cudaFree(dev_bvhNodes);
@@ -539,6 +543,8 @@ void pathtrace(uchar4* pbo, int frame, int iter)
     sd.vertices_size = hst_scene->masterMeshData.vertices.size();
     sd.normals = dev_normals;
     sd.normals_size = hst_scene->masterMeshData.normals.size();
+    sd.tangents = dev_tangents;
+    sd.tangents_size = hst_scene->masterMeshData.tangents.size();
     sd.uvs = dev_uvs;
     sd.uvs_size = hst_scene->masterMeshData.uvs.size();
     sd.indices = dev_indices;

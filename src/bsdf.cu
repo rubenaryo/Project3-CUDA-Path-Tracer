@@ -576,11 +576,12 @@ __global__ void skMicrofacetPBR(ShadeKernelArgs args)
     //albedo = material.color;
     //metallicRough = metallicRoughFallback;
 
-    float metallic = glm::clamp(metallicRough.b, 0.001f, 1.0f);
-    float roughness = glm::clamp(metallicRough.g, 0.001f, 1.0f);
+    float roughness = glm::clamp(metallicRough.g, 0.01f, 1.0f);
+    float metallic = glm::clamp(metallicRough.b, 0.01f, 1.0f);
 
-    //metallic = 1.0f;
-    //roughness = 0.4f;
+    albedo = material.color;
+    metallic = 1.0f;
+    roughness = 0.1f;
     
     glm::vec3 wiW;
     float pdf;

@@ -343,6 +343,7 @@ __host__ bool Scene::loadGLTF(const std::string& relPath, const std::vector<Mate
 
             std::vector<glm::vec3>&  allVertices = meshData.vertices;
             std::vector<glm::vec3>&  allNormals = meshData.normals;
+            std::vector<glm::vec3>&  allTangents = meshData.tangents;
             std::vector<glm::vec2>&  allUVs = meshData.uvs;
             std::vector<glm::uvec3>& allIndices = meshData.indices;
 
@@ -356,6 +357,8 @@ __host__ bool Scene::loadGLTF(const std::string& relPath, const std::vector<Mate
             // Load normals and UVs
             auto normals = getBufferData<glm::vec3>(model,
                 primitive.attributes.count("NORMAL") ? primitive.attributes.at("NORMAL") : -1);
+            auto tangents = getBufferData<glm::vec3>(model,
+                primitive.attributes.count("TANGENT") ? primitive.attributes.at("TANGENT") : -1);
             auto uvs = getBufferData<glm::vec2>(model,
                 primitive.attributes.count("TEXCOORD_0") ? primitive.attributes.at("TEXCOORD_0") : -1);
 
@@ -364,6 +367,9 @@ __host__ bool Scene::loadGLTF(const std::string& relPath, const std::vector<Mate
 
             if (normals.size()) 
                 allNormals.insert(allNormals.end(), normals.begin(), normals.end());
+
+            if (tangents.size())
+                allTangents.insert(allTangents.end(), tangents.begin(), tangents.end());
 
             if (uvs.size()) 
                 allUVs.insert(allUVs.end(), uvs.begin(), uvs.end());
@@ -420,6 +426,13 @@ __host__ bool Scene::loadGLTF(const std::string& relPath, const std::vector<Mate
             meshData.normals.resize(meshData.vertices.size(), glm::vec3(0.0f, 0.0f, 1.0f));
         }
 
+        bool hasTangents = true;
+        if (meshData.tangents.size() < meshData.vertices.size()) // no normals, or not as many
+        {
+            hasTangents = false;
+            meshData.tangents.resize(meshData.vertices.size(), glm::vec3(0.0f, 1.0f, 0.0f));
+        }
+
         bool hasUVs = true;
         if (meshData.uvs.size() < meshData.vertices.size())
         {
@@ -438,6 +451,7 @@ __host__ bool Scene::loadGLTF(const std::string& relPath, const std::vector<Mate
         newGeom.matSortKey = BuildSortKey(mat.type, matId);
         newGeom.bvhRootIdx = bvhRootIdx;
         newGeom.hasNormals = hasNormals;
+        newGeom.hasTangents = hasTangents;
         newGeom.hasUVs = hasUVs;
     }
 

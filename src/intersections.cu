@@ -378,8 +378,6 @@ __host__ __device__  float meshIntersectionTest(Geom meshGeom, const SceneData& 
     if (hit)
     {
         intersectionPoint = glm::vec3(meshGeom.transform * glm::vec4(isectResult.pos, 1.0f));
-        normal = glm::vec3(meshGeom.invTranspose * glm::vec4(isectResult.normal, 0.0f));
-        normal = glm::normalize(normal);
 
         float u = isectResult.uv.x;
         float v = isectResult.uv.y;
@@ -403,17 +401,44 @@ __host__ __device__  float meshIntersectionTest(Geom meshGeom, const SceneData& 
         glm::vec2 deltaUV2 = uv2 - uv0;
         
         float det = deltaUV1.x * deltaUV2.y - deltaUV1.y * deltaUV2.x;
-
-        if (fabsf(det) < FLT_EPSILON)
+        
+        if (meshGeom.hasNormals)
         {
-            glm::vec3 bitangent;
-            createCoordinateSystem(normal, tangent, bitangent);
+            glm::vec3 n0 = sd.normals[triIndices.x];
+            glm::vec3 n1 = sd.normals[triIndices.y];
+            glm::vec3 n2 = sd.normals[triIndices.z];
+
+            isectResult.normal = w * n0 +
+                u * n1 +
+                v * n2;
+        }
+
+        normal = glm::vec3(meshGeom.invTranspose * glm::vec4(isectResult.normal, 0.0f));
+        normal = glm::normalize(normal);
+
+        if (meshGeom.hasTangents)
+        {
+            glm::vec3 t0 = sd.tangents[triIndices.x];
+            glm::vec3 t1 = sd.tangents[triIndices.y];
+            glm::vec3 t2 = sd.tangents[triIndices.z];
+
+            tangent = w * t0 +
+                u * t1 +
+                v * t2;
         }
         else
         {
-            float invDet = 1.0f / (det);
-            tangent = invDet * (deltaUV2.y * edge1 - deltaUV1.y * edge2);
-            tangent = glm::normalize(tangent - normal * glm::dot(normal, tangent)); // correction
+            if (fabsf(det) < FLT_EPSILON)
+            {
+                glm::vec3 bitangent;
+                createCoordinateSystem(normal, tangent, bitangent);
+            }
+            else
+            {
+                float invDet = 1.0f / (det);
+                tangent = invDet * (deltaUV2.y * edge1 - deltaUV1.y * edge2);
+                tangent = glm::normalize(tangent - normal * glm::dot(normal, tangent)); // correction
+            }
         }
 
 
