@@ -377,7 +377,6 @@ __device__ bool SolveDirectLighting(const SceneData& sd, cudaTextureObject_t env
 #else
 #define HANDLE_MISS(idx, intersection, pathSegments)              \
         if ((intersection).t <= 0.0f) {                               \
-            (pathSegments)[(idx)].color = glm::vec3(0.0f);            \
             (pathSegments)[(idx)].remainingBounces = 0;               \
             return;                                                   \
         }
@@ -394,7 +393,7 @@ __global__ void skDiffuse(ShadeKernelArgs args)
     const ShadeableIntersection intersection = args.shadeableIntersections[idx];
     const Material material = args.materials[GetMaterialIDFromSortKey(intersection.matSortKey)];
 
-    HANDLE_MISS(idx, intersection, pathSegments);
+    HANDLE_MISS(idx, intersection, args.pathSegments);
 
     thrust::default_random_engine rng = makeSeededRandomEngine(args.iter, idx, path.remainingBounces);
     glm::vec3 view_point = path.ray.origin + intersection.t * path.ray.direction;
@@ -466,7 +465,7 @@ __global__ void skSpecular(ShadeKernelArgs args)
     const ShadeableIntersection intersection = args.shadeableIntersections[idx];
     const Material material = args.materials[GetMaterialIDFromSortKey(intersection.matSortKey)];
 
-    HANDLE_MISS(idx, intersection, pathSegments);
+    HANDLE_MISS(idx, intersection, args.pathSegments);
 
     glm::vec3 view_point = path.ray.origin + intersection.t * path.ray.direction;
     glm::vec3 wiW_bsdf;
@@ -492,7 +491,7 @@ __global__ void skEmissive(ShadeKernelArgs args)
     const ShadeableIntersection intersection = args.shadeableIntersections[idx];
     const Material material = args.materials[GetMaterialIDFromSortKey(intersection.matSortKey)];
 
-    HANDLE_MISS(idx, intersection, pathSegments);
+    HANDLE_MISS(idx, intersection, args.pathSegments);
 
     assert(material.type == MT_EMISSIVE);
     
@@ -537,7 +536,7 @@ __global__ void skMicrofacetPBR(ShadeKernelArgs args)
     const ShadeableIntersection intersection = args.shadeableIntersections[idx];
     const Material material = args.materials[GetMaterialIDFromSortKey(intersection.matSortKey)];
 
-    HANDLE_MISS(idx, intersection, pathSegments);
+    HANDLE_MISS(idx, intersection, args.pathSegments);
 
     thrust::default_random_engine rng = makeSeededRandomEngine(args.iter, idx, path.remainingBounces);
     glm::vec3 view_point = path.ray.origin + intersection.t * path.ray.direction;
@@ -600,6 +599,8 @@ __global__ void skMicrofacetPBR(ShadeKernelArgs args)
     args.pathSegments[idx].ray = SpawnRay(view_point, wiW);
     args.pathSegments[idx].remainingBounces--;
 
+
+#if !ONLY_BSDF_SAMPLING
     // Direct Light Sampling
     // Key difference using MIS: Accumulate direct lighting radiance here.
     cudaTextureObject_t envMapObj = args.envMaps ? args.envMaps[0] : 0;
@@ -615,6 +616,7 @@ __global__ void skMicrofacetPBR(ShadeKernelArgs args)
         thisBounceRadiance += directLightResult * PowerHeuristic(1, pdf_Li, 1, bsdf_pdf);
         args.pathSegments[idx].Lo += thisBounceRadiance;
     }
+#endif
 }
 
 #if ONLY_BSDF_SAMPLING
@@ -675,27 +677,29 @@ __global__ void skDiffuseDirect(ShadeKernelArgs args)
 
     HANDLE_MISS(idx, intersection, pathSegments);
 
-    Light* lights = args.sceneData.lights;
     int numLights = args.sceneData.lights_size;
-    thrust::uniform_int_distribution<int> iu0N(0, numLights - 1);
+
     glm::vec3 wiW;
     float pdf;
     glm::vec3 view_point = path.ray.origin + (intersection.t * path.ray.direction);
+    glm::vec3 norW = intersection.surfaceNormal;
     glm::vec3 totalDirectLight(0.0f);
     glm::vec3 bsdf = f_diffuse(material.color);
     const int NUM_SAMPLES = 4;
     for (int s = 0; s != NUM_SAMPLES; ++s)
     {
         glm::vec3 radiance;
-        if (!SolveDirectLighting(args.sceneData, intersection, view_point, rng, radiance, wiW, pdf))
+        cudaTextureObject_t envMapObj = args.envMaps ? args.envMaps[0] : 0;
+        if (!SolveDirectLighting(args.sceneData, envMapObj, norW, view_point, rng, radiance, wiW, pdf))
             continue;
 
-        float cosTheta = glm::dot(wiW, intersection.surfaceNormal);
+        float cosTheta = glm::dot(wiW, norW);
         if (cosTheta < FLT_EPSILON)
             continue;
 
         totalDirectLight += radiance * cosTheta / (NUM_SAMPLES * pdf);
     }
+    numLights += args.envMaps ? 1 : 0;
     totalDirectLight *= numLights;
 
     args.pathSegments[idx].throughput *= bsdf;

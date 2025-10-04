@@ -478,17 +478,15 @@ __host__ void shadeByMaterialType(int num_paths, int iter, int depth, const Scen
     }
 }
 
-__host__ void shadeLegacy(int num_paths, int iter, int depth)
+__host__ void shadeLegacy(int num_paths, int iter, int depth, const SceneData& sd)
 {
-    ShadeKernelArgs skArgs = {
-          iter
-        , num_paths
-        , depth
-        , dev_intersections[pathBufferIdx]
-        , dev_paths[pathBufferIdx]
-        , dev_materials
-        // TODO: Need to pass SceneData here
-    };
+    ShadeKernelArgs skArgs;
+    skArgs.iter = iter;
+    skArgs.depth = depth;
+    skArgs.materials = dev_materials;
+    skArgs.textures = dev_textureObjs;
+    skArgs.envMaps = dev_envMapObjs;
+    skArgs.sceneData = sd;
     void* cudaKernelArgs[] = { &skArgs };
 
     dim3 numblocksPathSegmentTracing = (num_paths + BLOCK_SIZE_1D - 1) / BLOCK_SIZE_1D;
@@ -579,7 +577,7 @@ void pathtrace(uchar4* pbo, int frame, int iter)
         shadeByMaterialType(num_paths, iter, depth, sd);
         checkCUDAError("shadeByMaterialType");
     #else
-        shadeLegacy(num_paths, iter, depth);
+        shadeLegacy(num_paths, iter, depth, sd);
     #endif
 
     #if STREAM_COMPACTION

@@ -255,16 +255,17 @@ __host__ __device__ bool intersectRayTriangle_MollerTrumbore(const Ray& ray,
     return false;
 }
 
-// TODO: potentially broken after mesh refactor
-__host__ __device__ bool testAllTrianglesForMesh(const Ray& r, uint32_t meshVtxIdx, const glm::vec3* vertices, uint32_t vtx_count, BVHIntersectResult& isectResult)
+__host__ __device__ bool testAllTrianglesForMesh(const Ray& r, const glm::uvec3* indices, uint32_t startTriIdx, uint32_t tri_count, const glm::vec3* vertices, uint32_t vtx_count, BVHIntersectResult& isectResult)
 {
     bool hit = false;
     isectResult.t = FLT_MAX;
-    for (uint32_t i = 0; (i + 2) < vtx_count; i += 3)
+    for (uint32_t i = startTriIdx; i < (startTriIdx + tri_count); ++i)
     {
-        glm::vec3 v0 = vertices[i];
-        glm::vec3 v1 = vertices[i + 1];
-        glm::vec3 v2 = vertices[i + 2];
+        glm::uvec3 idx = indices[i];
+
+        glm::vec3 v0 = vertices[idx.x];
+        glm::vec3 v1 = vertices[idx.y];
+        glm::vec3 v2 = vertices[idx.z];
 
         BVHIntersectResult tmpIsectResult;
         bool triHit = intersectRayTriangle_MollerTrumbore(r, v0, v1, v2, tmpIsectResult);
@@ -364,7 +365,9 @@ __host__ __device__  float meshIntersectionTest(Geom meshGeom, const SceneData& 
 #if USE_BVH
     bool hit = bvhIntersectionTest(localRay, meshGeom.bvhRootIdx, sd, isectResult);
 #else
-    bool hit = testAllTrianglesForMesh(localRay, 0, mesh.vtx, mesh.vtx_count, isectResult);
+    // The BVH is still built, we're just not gonna use it for searching
+    BVHNode root = bvhNodes[meshGeom.bvhRootIdx];
+    bool hit = testAllTrianglesForMesh(localRay, sd.indices, root.triIndex, root.triCount, sd.vertices, sd.vertices_size, isectResult);
 #endif
 
     if (hit)
