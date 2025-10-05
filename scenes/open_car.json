@@ -1,5 +1,5 @@
 {
-	"Environment":"../scenes/environmentmaps/kloofendal_overcast_puresky_4k.hdr",
+	"Environment":"../scenes/environmentmaps/Frozen_Waterfall_Ref.hdr",
     "Materials":
     {
         "light":
@@ -28,6 +28,14 @@
             "TYPE":"Specular",
             "RGB":[0.98, 0.98, 0.98]
         },
+		"car":
+		{
+			"TYPE":"MicrofacetPBR",
+            "RGB":[0.98, 0.98, 0.98],
+			"ROUGHNESS":0.0,
+			"METALLIC":1.0,
+			"DIFFUSE":"../scenes/meshes/Car/textures/body_baseColor.jpeg"
+		},
 		"pbr":
         {
             "TYPE":"MicrofacetPBR",
@@ -43,26 +51,27 @@
         "ITERATIONS":5000,
         "DEPTH":8,
         "FILE":"cornell",
-        "EYE":[0.0,5.0,10.5],
-        "LOOKAT":[0.0,10.0,0.0],
+        "EYE":[10.0,5.0,35.5],
+        "LOOKAT":[0.0,5.0,0.0],
         "UP":[0.0,1.0,0.0]
     },
     "Objects":
     [
-        {
-            "TYPE":"cube",
-            "MATERIAL":"diffuse_white",
-            "TRANS":[0.0,0.0,0.0],
-            "ROTAT":[0.0,0.0,0.0],
-            "SCALE":[100.0,0.01,100.0]
+		{
+            "TYPE":"rect",
+            "MATERIAL":"light",
+            "TRANS":[-5.0,18.0,7.0],
+            "ROTAT":[-45.0,-45.0,0.0],
+            "SCALE":[1.0,1.0,0.1]
         },
 		{
             "TYPE":"mesh",
-            "MATERIAL":["trophy", "trophybase"],
-            "TRANS":[0.0,0,0.0],
+            "MATERIAL":["specular_white"],
+            "TRANS":[0.0,3.0,0.0],
             "ROTAT":[0.0,0.0,0.0],
-            "SCALE":[0.35, 0.35, 0.35],
-			"PATH":"../scenes/meshes/Trophy/scene.gltf"
+            "SCALE":[0.1, 0.1, 0.1],
+			"PATH":"../scenes/meshes/Car/scene.gltf",
+			"USE_GLTF_MATS":true
         }
     ]
 }

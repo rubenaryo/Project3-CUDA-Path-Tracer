@@ -529,15 +529,16 @@ __device__ void sceneIntersect(PathSegment& path, const SceneData& sceneData, Sh
     if (hit_geom_index == -1)
     {
         result.t = -1.0f;
+        const float ENV_MAP_RADIANCE = 0.6f;
         if (envMaps)
         {
             path.throughput *= sampleEnvironmentMap(envMaps[0], pathCopy.ray.direction);
+            path.Lo += ENV_MAP_RADIANCE * path.throughput;
         }
         else
         {
             path.throughput *= glm::vec3(0.0f);
         }
-        path.Lo += path.throughput;
     }
     else
     {

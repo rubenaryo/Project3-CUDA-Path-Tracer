@@ -545,11 +545,17 @@ __global__ void skMicrofacetPBR(ShadeKernelArgs args)
     const glm::vec4 metallicRoughFallback(material.metallic, material.roughness, 1.0f, 1.0f);
 
     glm::vec3 woW = -path.ray.direction;
+    const glm::vec3 ERROR_COLOR(1.0f, 0.4118f, 0.7059f);
 
-    glm::vec3 albedo = TryTextureSample(args.textures, material.diffuseTexId, intersection.uv, material.color);
-    glm::vec4 metallicRough = TryTextureSample(args.textures, material.metallicRoughTexId, intersection.uv, metallicRoughFallback);
-
+    glm::vec3 albedo = material.color;
+    
     glm::vec3 norW = intersection.surfaceNormal;
+
+    if (material.diffuseTexId != -1)
+    {
+        glm::vec3 diffuseSample = glm::vec3(TextureSample(args.textures[material.diffuseTexId], intersection.uv));
+        albedo = diffuseSample * albedo; // material.color represents the baseColorFactor from GLTF in this case.
+    }
     
     if (material.normalTexId != -1)
     {
@@ -568,10 +574,16 @@ __global__ void skMicrofacetPBR(ShadeKernelArgs args)
         norW = glm::normalize(TBN * norT);
     }
     
-    // This assumes the metallic and roughness always go in the same channels as they should
-    // Someone should let the people on sketchfab know....
-    float roughness = glm::clamp(metallicRough.g, 0.01f, 1.0f);
-    float metallic = glm::clamp(metallicRough.b, 0.01f, 1.0f);
+    float roughness = material.roughness;
+    float metallic = material.metallic;
+
+    if (material.metallicRoughTexId != -1)
+    {
+        glm::vec4 sampledMetallicRough = TextureSample(args.textures[material.metallicRoughTexId], intersection.uv);
+
+        roughness *= sampledMetallicRough.g;
+        metallic *= sampledMetallicRough.b;
+    }
 
     glm::vec3 wiW;
     float pdf;

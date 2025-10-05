@@ -12,6 +12,7 @@
 #include <iostream>
 #include <string>
 #include <unordered_map>
+#include <set>
 
 using namespace std;
 using json = nlohmann::json;
@@ -189,22 +190,7 @@ void Scene::loadFromJSON(const std::string& jsonName)
             newGeom.type = GT_MESH;
             const auto& relPath = p["PATH"];
 
-            std::vector<std::string> materialsRequested = p.at("MATERIAL").get<std::vector<std::string>>();
-            std::vector<MaterialID> materialIdsRequested;
-            materialIdsRequested.reserve(materialsRequested.size());
-            for (const std::string& matStr : materialsRequested)
-            {
-                MaterialID result = 0;
-                auto findIt = MatNameToID.find(matStr);
-                if (findIt != MatNameToID.end())
-                {
-                    result = findIt->second;
-                    assert(result < materials.size());
-                }
-                materialIdsRequested.push_back(result);
-            }
-
-            bool loadSuccess = loadGLTF(relPath, materialIdsRequested, newGeom);
+            bool loadSuccess = loadGLTF(relPath, newGeom);
             if (!loadSuccess)
             {
                 std::string relPathStr = relPath;
@@ -303,7 +289,7 @@ std::vector<T> getBufferData(const tinygltf::Model& model, int accessorIndex)
 }
 
 // Returns mesh id
-__host__ bool Scene::loadGLTF(const std::string& relPath, const std::vector<MaterialID>& materialIdsRequested, Geom geomTemplate)
+__host__ bool Scene::loadGLTF(const std::string& relPath, Geom geomTemplate)
 {
     tinygltf::Model model;
     tinygltf::TinyGLTF loader;
@@ -322,14 +308,86 @@ __host__ bool Scene::loadGLTF(const std::string& relPath, const std::vector<Mate
         return false;
     }
 
-    assert(materialIdsRequested.size() <= model.materials.size());
+    uint32_t vertexOffset = 0;
 
-    int numMaterials = materialIdsRequested.size();
+    int numMaterials = 0;
+
+    // Holds newly loaded texture ids so they can be reused if referenced multiple times.
+    std::unordered_map<int, int> gltfTexId2TexId;
+    std::vector<MaterialID> materialIdsRequested;
+
+    // Build new relative path for material img searching:
+    size_t slashPos = relPath.find_last_of("/\\");
+    std::string baseGltfPath = (slashPos == std::string::npos) ? "" : relPath.substr(0, slashPos + 1);
+    auto TryLoadGLTFTexture = [baseGltfPath, &gltfTexId2TexId, &model, this](int texIdx, int& out_ptTexId)
+    {
+        if (texIdx < model.textures.size())
+        {
+            // lookup if existing
+            auto itFind = gltfTexId2TexId.find(texIdx);
+            if (itFind != gltfTexId2TexId.end())
+            {
+                out_ptTexId = itFind->second;
+                return true;
+            }
+
+            const tinygltf::Image& textureImg = model.images[texIdx];
+
+            std::string imgRelPath = baseGltfPath;
+            imgRelPath.append(textureImg.uri);
+
+            std::filesystem::path filePath(imgRelPath);
+            std::string absoluteStr = std::filesystem::absolute(filePath).string();
+            //std::filesystem::path absolutePath(imgRelPath);
+
+            if (!std::filesystem::exists(imgRelPath))
+            {
+                printf("Path does not exist for %s!\n", absoluteStr.c_str());
+                out_ptTexId = -1;
+                return false; // We needed this, but it doesn't exist.
+            }
+
+            // Create new texture and hold ID in out_ptTexId
+            out_ptTexId = textures.size();
+            gltfTexId2TexId[texIdx] = out_ptTexId;
+            HostTextureHandle& handle = textures.emplace_back();
+            handle.filePath = std::move(absoluteStr);
+            return true;
+        }
+        out_ptTexId = -1;
+        return true;
+    };
+
+    for (int m = 0; m < model.materials.size(); ++m)
+    {
+        const tinygltf::Material& gltfMaterial = model.materials[m];
+        
+        MaterialID newMatId = materials.size();
+        Material& pathtracemat = materials.emplace_back();
+
+        auto& pbrmr = gltfMaterial.pbrMetallicRoughness;
+        int baseColorTexIdx = pbrmr.baseColorTexture.index;
+        int normalMapTexIdx = gltfMaterial.normalTexture.index;
+        int metalRoughTexIdx = pbrmr.metallicRoughnessTexture.index;
+
+        TryLoadGLTFTexture(baseColorTexIdx, pathtracemat.diffuseTexId);
+        TryLoadGLTFTexture(normalMapTexIdx, pathtracemat.normalTexId);
+        TryLoadGLTFTexture(metalRoughTexIdx, pathtracemat.metallicRoughTexId);
+
+        auto& bcf = gltfMaterial.pbrMetallicRoughness.baseColorFactor;
+
+        pathtracemat.color = glm::vec3(bcf[0], bcf[1], bcf[2]);
+        pathtracemat.metallic = (float)pbrmr.metallicFactor;
+        pathtracemat.roughness = (float)pbrmr.roughnessFactor;
+
+        pathtracemat.type = MT_MICROFACET_PBR;
+
+        materialIdsRequested.push_back(newMatId);
+    }
+    numMaterials = materialIdsRequested.size();
 
     std::vector<MeshData> materialToMeshData;
     materialToMeshData.resize(numMaterials);
-
-    uint32_t vertexOffset = 0;
 
     // Grading Note: Used AI Help for this part
     for (const auto& mesh : model.meshes) {

@@ -7,7 +7,7 @@ class Scene
 {
 private:
     void loadFromJSON(const std::string& jsonName);
-    __host__ bool loadGLTF(const std::string& relPath, const std::vector<MaterialID>& materialIdsRequested, Geom geomTemplate);
+    __host__ bool loadGLTF(const std::string& relPath, Geom geomTemplate);
 
 public:
     Scene(std::string filename);

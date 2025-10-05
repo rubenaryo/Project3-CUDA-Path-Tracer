@@ -1,11 +1,12 @@
 {
+	"Environment":"../scenes/environmentmaps/interior_atelier_soft_daylight.hdr",
     "Materials":
     {
         "light":
         {
             "TYPE":"Emitting",
             "RGB":[1.0, 1.0, 1.0],
-            "EMITTANCE":15.0
+            "EMITTANCE":3.0
         },
         "diffuse_white":
         {
@@ -27,25 +28,6 @@
             "TYPE":"Specular",
             "RGB":[0.98, 0.98, 0.98]
         },
-		"trophy":
-		{
-			"TYPE":"MicrofacetPBR",
-            "RGB":[0.98, 0.98, 0.98],
-			"ROUGHNESS":0.0,
-			"METALLIC":1.0,
-			"DIFFUSE":"../scenes/meshes/Trophy/Trophy_Mtl_baseColor.png",
-			"NORMAL":"../scenes/meshes/Trophy/Trophy_Mtl_normal.png",
-			"METALLIC_ROUGHNESS":"../scenes/meshes/Trophy/Trophy_Mtl_metallicRoughness.png"
-		},
-		"trophybase":
-		{
-			"TYPE":"MicrofacetPBR",
-            "RGB":[0.98, 0.98, 0.98],
-			"ROUGHNESS":0.0,
-			"METALLIC":1.0,
-			"DIFFUSE":"../scenes/meshes/Trophy/Trophy_base_Mtl_baseColor.png",
-			"METALLIC_ROUGHNESS":"../scenes/meshes/Trophy/Trophy_base_Mtl_metallicRoughness.png"
-		},
 		"pbr":
         {
             "TYPE":"MicrofacetPBR",
@@ -111,7 +93,7 @@
         },
 		{
             "TYPE":"mesh",
-            "MATERIAL":["trophy", "trophybase"],
+            "MATERIAL":["trophy"],
             "TRANS":[0.0,-3.9,0.0],
             "ROTAT":[0.0,-45.0,0.0],
             "SCALE":[0.25, 0.25, 0.25],
