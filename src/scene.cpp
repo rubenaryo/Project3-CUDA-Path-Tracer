@@ -147,7 +147,7 @@ void Scene::loadFromJSON(const std::string& jsonName)
 
         MaterialID matId = 0;
 
-        if (!p["MATERIAL"].is_array()) // Legacy default case, just a raw string
+        if (p.find("MATERIAL") != p.end() && !p["MATERIAL"].is_array()) // Legacy default case, just a raw string
         {
             auto findIt = MatNameToID.find(p["MATERIAL"]);
             if (findIt != MatNameToID.end())
