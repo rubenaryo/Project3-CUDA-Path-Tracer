@@ -9,6 +9,8 @@ CUDA Path Tracer
 
 <img src="img/trophy_QHD_5000.png" width="1280">
 
+World Cup Trophy @ 2560x1440, 5000 Samples per pixel ([Link](https://sketchfab.com/3d-models/world-cup-trophy-e28e9b2d3c374303974bd9898bbb2a64))
+
 ### Overview
 This is a CUDA-based Monte-Carlo Path Tracer built to experiment with writing highly parallel programs and implementing different rendering methods at a low-level.
 
@@ -19,14 +21,14 @@ In addition to a core implementation, this program supports:
 - Texture Mapping (Diffuse, Normal, Metallic/Roughness)
 - Environment Mapping (HDR)
 - Physically Based Shading using the Cook-Torrance microfacet model
-- Custom loading of GLTF-based meshes
+- Loading of GLTF-based meshes
 - Bounding Volume Hierarchies (BVH)
 
 ### Multiple Importance Sampling
 
 | <img src="img/No_MIS.png" width="400"> | <img src="img/Yes_MIS.png" width="400"> | <img src="img/DirectLighting.png" width="400"> | 
 |:--:|:--:|:--:| 
-|500 Iterations (MIS Off): 37.3 FPS|500 Iterations (MIS On): 34.2 FPS|Direct Lighting only |
+|500 Samples (MIS Off): 37.3 FPS|500 Samples (MIS On): 34.2 FPS|Direct Lighting only |
 
 In a naive path tracing implementation, rays are bounced around the scene up to a maximum depth, and useful light information is gained only when the chain resolves in an intersection with a light source. However, rays that bounce around the scene but never collide with a light source are simply discarded, which is incredibly wasteful.
 
@@ -40,7 +42,7 @@ As with most core path-tracing features, MIS benefits immensely from paralleliza
 
 | ![](img/Car_NoTex.png) | ![](img/Car_Tex.png) |
 |:--:|:--:|
-|5000 Iterations (Base): 43.7 FPS|5000 Iterations (Textured): 43.2 FPS|
+|5000 Samples (Base): 43.7 FPS|5000 Samples (Textured): 43.2 FPS|
 
 Texture Mapping is a core part of giving life to any model. This path tracer supports diffuse, normal, and metallic/rough texture maps in the physically-based shading kernel.
 
@@ -54,7 +56,7 @@ Much like with MIS, a CPU implementation would suffer from paths having to be pr
 
 | ![](img/noEnv.png) | ![](img/yesEnv.png) |
 |:--:|:--:|
-|2000 Iterations: 11.2 FPS|2000 Iterations: 10.8 FPS|
+|2000 Samples: 11.2 FPS|2000 Samples: 10.8 FPS|
 
 Environment mapping is also a great way to add detail to a scene. This path tracer supports loading of .hdr environment maps, which serve as a skybox for the scene. This is important for global illumination and can help with convergence, as even rays that miss explicit light geometries can retrieve useful light information by sampling the environment map's luminance.
 
@@ -65,10 +67,44 @@ We see a similar performance drop as weith texture mapping. 11.2 FPS -> 10.8 FPS
 This is an area I would like to expand on for future work. There are many benefits to importance sampling environment maps by building diffuse/glossy convolutions as a preprocess.
 
 ### Physically-Based Rendering
+
 | ![](img/noPBR.png) | ![](img/yesPBR.png) |
 |:--:|:--:|
-|2500 Iterations (Lambertian Material): 22.3 FPS|2500 Iterations (Microfacet PBR Material): 22.2 FPS|
+|2500 Samples (Lambertian Material): 22.3 FPS|2500 Samples (Microfacet PBR Material): 22.2 FPS|
 
+This path tracer employs the [Cook-Torrance] (https://graphicscompendium.com/gamedev/15-pbr) microfacet reflectance model to produce physically accurate, photorealistic results. This reflection model employs the commonly used Schlick approximation for the fresnel term in order to produce specular highlights.
+
+Using metallic/roughness textures combined with custom GLTF models allows for many options for scene composition. 
+
+We also only see a negligible performance impact from using the PBR kernel, despite the additional texture lookup: 22.3 FPS -> 22.2 FPS
+
+Much like with the other rendering features, a hypothetical CPU implementation would suffer from being sequential.
+
+### Loading GLTF Models
+
+| ![](img/gunModel.png) | ![](img/dragonModel.png) |
+|:--:|:--:|
+|[9MM Pistol](https://sketchfab.com/3d-models/9-mm-5124e7fe60fb4d3ab62460609d23f365) (5000 Samples)|[Stanford Dragon](https://sketchfab.com/3d-models/stanford-dragon-pbr-5d610f842a4542ccb21613d41bbd7ea1) (5000 Samples)|
+
+There is support for GLTF-based models. This path tracer makes use of [tinygltf](https://github.com/syoyo/tinygltf) for parsing, and the loading process batches the underlying vertex data by specified material in the GLTF file. 
+
+All models are drawn as indexed, and for models which contain no indices, they are generated automatically. 
+
+In order to load a model, it must be specified with the "mesh" geometry type in the scene's json file. No materials need to be specified as they are read automatically. Any corresponding textures will also be looked up and loaded if present.
+
+For further performance discussion, see the section on Bounding Volume Hierarchies.
+
+### Bounding Volume Hierarchies
+
+This path tracer makes use of Bounding Volume Hierarchies (BVH) for ray-triangle intersect detection. A BVH is a spatial data structure that groups closely positioned triangles into buckets defined by Axis-Aligned Bounding Boxes stored as a tree. This tree is built and then transferred to the device by the host at load-time. Each ray traverses the data structure when searching for possible collions within its path, leading to a massive speed up.
+
+We see a large discrepancy in the impact using a BVH has on FPS. There is clearly overhead in additionally testing each AABB, as shown by the much smaller Fox model having a similar post-BVH performance as the Dragon. However, it is curious that the Dragon ends up with such high performance after the fact, especially when compared to the Trophy, which did not even reach 30 FPS. 
+
+One possible explanation is that the BVH approach used splits the vertices simply by axis, whereas a smarter heuristic such as the resulting surface area might yield a better lookup result due to more even spread of triangles per each bounding box. This is an optimization to look into for the future.
+
+| ![](img/bvhChart.png) | 
+|:--:| 
+| Somewhat unexpected results |
 
 ## Additional Files 
 Added to CMakeLists.txt in addition to those from the base code.
