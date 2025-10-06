@@ -24,9 +24,9 @@ In addition to a core implementation, this program supports:
 
 ### Multiple Importance Sampling
 
-| ![](img/No_MIS.png) | ![](img/Yes_MIS.png) | ![](img/DirectLighting.png) | 
+| <img src="img/No_MIS.png" width="400"> | <img src="img/Yes_MIS.png" width="400"> | <img src="img/DirectLighting.png" width="400"> | 
 |:--:|:--:|:--:| 
-|500 Iterations (MIS Off): 37.3 FPS|500 Iterations (MIS On): 34.2 FPS|Demonstration of the same scene with Direct Lighting only. |
+|500 Iterations (MIS Off): 37.3 FPS|500 Iterations (MIS On): 34.2 FPS|Direct Lighting only |
 
 In a naive path tracing implementation, rays are bounced around the scene up to a maximum depth, and useful light information is gained only when the chain resolves in an intersection with a light source. However, rays that bounce around the scene but never collide with a light source are simply discarded, which is incredibly wasteful.
 
@@ -35,10 +35,6 @@ Multiple Importance Sampling (MIS) is an incredibly useful technique for address
 We take a modest performance loss per-frame, but the result approximates to a clearer, less noisy image in much less time.
 
 As with most core path-tracing features, MIS benefits immensely from parallelization, as each ray is independent and only relies on static data from the scene. Doing this on the CPU would scale poorly as resolution increases, with each path having to execute in sequence.
-
-| <img src="img/DirectLighting.png" width="400">| 
-|:--:| 
-| Demonstration of the same scene with Direct Lighting only. |
 
 ## - Texture Mapping (Diffuse, Normal, Metallic/Roughness)
 
