@@ -1,5 +1,5 @@
 {
-	"Environment":"../scenes/environmentmaps/interior_atelier_soft_daylight.hdr",
+	"Environment":"../scenes/environmentmaps/veranda_4k.hdr",
     "Materials":
     {
         "light":
@@ -28,15 +28,6 @@
             "TYPE":"Specular",
             "RGB":[0.98, 0.98, 0.98]
         },
-		"dragon":
-		{
-			"TYPE":"MicrofacetPBR",
-            "RGB":[0.98, 0.98, 0.98],
-			"ROUGHNESS":0.0,
-			"METALLIC":1.0,
-			"DIFFUSE":"../scenes/meshes/Dragon/dragon_baseColor.jpeg",
-			"NORMAL":"../scenes/meshes/Dragon/dragon_normal.png"
-		},
 		"pbr":
         {
             "TYPE":"MicrofacetPBR",

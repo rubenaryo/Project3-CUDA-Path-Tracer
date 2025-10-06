@@ -1,12 +1,12 @@
 {
-	"Environment":"../scenes/environmentmaps/14-Hamarikyu_Bridge_B_3k.hdr",
+	"Environment":"../scenes/environmentmaps/cave_wall_4k.hdr",
     "Materials":
     {
         "light":
         {
             "TYPE":"Emitting",
             "RGB":[1.0, 1.0, 1.0],
-            "EMITTANCE":10.0
+            "EMITTANCE":5.0
         },
         "diffuse_white":
         {
@@ -28,31 +28,12 @@
             "TYPE":"Specular",
             "RGB":[0.98, 0.98, 0.98]
         },
-		"trophy":
-		{
-			"TYPE":"MicrofacetPBR",
-            "RGB":[0.98, 0.98, 0.98],
-			"ROUGHNESS":0.0,
-			"METALLIC":1.0,
-			"DIFFUSE":"../scenes/meshes/Trophy/Trophy_Mtl_baseColor.png",
-			"NORMAL":"../scenes/meshes/Trophy/Trophy_Mtl_normal.png",
-			"METALLIC_ROUGHNESS":"../scenes/meshes/Trophy/Trophy_Mtl_metallicRoughness.png"
-		},
-		"trophybase":
-		{
-			"TYPE":"MicrofacetPBR",
-            "RGB":[0.98, 0.98, 0.98],
-			"ROUGHNESS":0.0,
-			"METALLIC":1.0,
-			"DIFFUSE":"../scenes/meshes/Trophy/Trophy_base_Mtl_baseColor.png",
-			"METALLIC_ROUGHNESS":"../scenes/meshes/Trophy/Trophy_base_Mtl_metallicRoughness.png"
-		},
-		"pbr":
+		"rough_mirror":
         {
             "TYPE":"MicrofacetPBR",
             "RGB":[0.98, 0.98, 0.98],
-            "ROUGHNESS":0.0,
-			"METALLIC":0.3
+            "ROUGHNESS":0.1,
+			"METALLIC":1.0
         }
     },
     "Camera":
@@ -71,14 +52,14 @@
         {
             "TYPE":"rect",
             "MATERIAL":"light",
-            "TRANS":[-3.0,9.9,0.0],
+            "TRANS":[-3.0,11.9,0.0],
             "ROTAT":[90.0,0.0,0.0],
             "SCALE":[3.0,3.0,0.1]
         },
 		{
             "TYPE":"rect",
             "MATERIAL":"light",
-            "TRANS":[3.0,9.9,0.0],
+            "TRANS":[3.0,11.9,0.0],
             "ROTAT":[90.0,0.0,0.0],
             "SCALE":[3.0,3.0,0.1]
         },
@@ -87,41 +68,40 @@
             "MATERIAL":"diffuse_white",
             "TRANS":[0.0,0.0,0.0],
             "ROTAT":[0.0,0.0,0.0],
-            "SCALE":[10.0,0.01,10.0]
+            "SCALE":[16.0,0.01,16.0]
         },
         {
             "TYPE":"cube",
             "MATERIAL":"diffuse_white",
-            "TRANS":[0.0,10.0,0.0],
+            "TRANS":[0.0,12.0,0.0],
             "ROTAT":[0.0,0.0,90.0],
-            "SCALE":[0.01,10.0,10.0]
+            "SCALE":[0.01,16.0,16.0]
         },
         {
             "TYPE":"cube",
-            "MATERIAL":"diffuse_white",
+            "MATERIAL":"rough_mirror",
             "TRANS":[0.0,5.0,-5.0],
             "ROTAT":[0.0,90.0,0.0],
-            "SCALE":[0.01,10.0,10.0]
+            "SCALE":[0.01,16.0,16.0]
         },
         {
             "TYPE":"cube",
-            "MATERIAL":"diffuse_red",
-            "TRANS":[-5.0,5.0,0.0],
+            "MATERIAL":"rough_mirror",
+            "TRANS":[8.0,5.0,0.0],
             "ROTAT":[0.0,0.0,0.0],
-            "SCALE":[0.01,10.0,10.0]
+            "SCALE":[0.01,16.0,16.0]
         },
         {
-            "TYPE":"cube",
-            "MATERIAL":"diffuse_green",
-            "TRANS":[5.0,5.0,0.0],
+            "TYPE":"sphere",
+            "MATERIAL":"specular_white",
+            "TRANS":[-4.0,6.0,-3.0],
             "ROTAT":[0.0,0.0,0.0],
-            "SCALE":[0.01,10.0,10.0]
+            "SCALE":[3.0,3.0,3.0]
         },
 		{
             "TYPE":"mesh",
-            "MATERIAL":["trophy", "trophybase"],
-            "TRANS":[0.0,-3.9,0.0],
-            "ROTAT":[0.0,0.0,0.0],
+            "TRANS":[2.0,-3.92,1.0],
+            "ROTAT":[0.0,-45.0,0.0],
             "SCALE":[0.25, 0.25, 0.25],
 			"PATH":"../scenes/meshes/Trophy/scene.gltf"
         }

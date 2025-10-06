@@ -1,0 +1,11 @@
+Model Information:
+* title:	The God of War - Blades Of Chaos
+* source:	https://sketchfab.com/3d-models/the-god-of-war-blades-of-chaos-03d846c194b24832a6d371fac2a7dc82
+* author:	mefq (https://sketchfab.com/thatmefq)
+
+Model License:
+* license type:	CC-BY-NC-SA-4.0 (http://creativecommons.org/licenses/by-nc-sa/4.0/)
+* requirements:	Author must be credited. No commercial use. Modified versions must have the same license.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "The God of War - Blades Of Chaos" (https://sketchfab.com/3d-models/the-god-of-war-blades-of-chaos-03d846c194b24832a6d371fac2a7dc82) by mefq (https://sketchfab.com/thatmefq) licensed under CC-BY-NC-SA-4.0 (http://creativecommons.org/licenses/by-nc-sa/4.0/)
