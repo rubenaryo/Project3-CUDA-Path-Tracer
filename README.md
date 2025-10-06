@@ -145,6 +145,12 @@ In my testing, zip iterators roughly *halved* my performance. While more investi
 
 In short, don't use them!
 
+## Bloopers
+
+![](./img/glowing_fox.png)
+
+![](./img/blooper_crt.png)
+
 ## Additional Files 
 Added to CMakeLists.txt in addition to those from the base code.
 - bsdf.h/cu 
