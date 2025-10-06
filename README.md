@@ -36,7 +36,7 @@ We take a modest performance loss per-frame, but the result approximates to a cl
 
 As with most core path-tracing features, MIS benefits immensely from parallelization, as each ray is independent and only relies on static data from the scene. Doing this on the CPU would scale poorly as resolution increases, with each path having to execute in sequence.
 
-## - Texture Mapping (Diffuse, Normal, Metallic/Roughness)
+### Texture Mapping (Diffuse, Normal, Metallic/Roughness)
 
 | ![](img/Car_NoTex.png) | ![](img/Car_Tex.png) |
 |:--:|:--:|
@@ -49,6 +49,26 @@ There is some performance overhead every time a texture is sampled, as multiple 
 Fortunately, we only see a minimal performance dip when shading, from 43.7 -> 43.2 FPS. 
 
 Much like with MIS, a CPU implementation would suffer from paths having to be processed sequentially, although it would not suffer from the same drawbacks of simultaneous global device memory reads.
+
+### Environment Mapping
+
+| ![](img/noEnv.png) | ![](img/yesEnv.png) |
+|:--:|:--:|
+|2000 Iterations: 11.2 FPS|2000 Iterations: 10.8 FPS|
+
+Environment mapping is also a great way to add detail to a scene. This path tracer supports loading of .hdr environment maps, which serve as a skybox for the scene. This is important for global illumination and can help with convergence, as even rays that miss explicit light geometries can retrieve useful light information by sampling the environment map's luminance.
+
+Much like with regular texture mapping, there is overhead in sampling environment maps as multiple rays could be trying to read from the same global memory addresses. The same issues for a hypothetical CPU implementation would also apply. 
+
+We see a similar performance drop as weith texture mapping. 11.2 FPS -> 10.8 FPS
+
+This is an area I would like to expand on for future work. There are many benefits to importance sampling environment maps by building diffuse/glossy convolutions as a preprocess.
+
+### Physically-Based Rendering
+| ![](img/noPBR.png) | ![](img/yesPBR.png) |
+|:--:|:--:|
+|2500 Iterations (Lambertian Material): 22.3 FPS|2500 Iterations (Microfacet PBR Material): 22.2 FPS|
+
 
 ## Additional Files 
 Added to CMakeLists.txt in addition to those from the base code.

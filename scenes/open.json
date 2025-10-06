@@ -1,11 +1,12 @@
 {
+	"Environment":"../scenes/environmentmaps/interior_atelier_soft_daylight.hdr",
     "Materials":
     {
         "light":
         {
             "TYPE":"Emitting",
             "RGB":[1.0, 1.0, 1.0],
-            "EMITTANCE":5.0
+            "EMITTANCE":115.0
         },
         "diffuse_white":
         {
@@ -33,7 +34,7 @@
     {
         "RES":[800,800],
         "FOVY":45.0,
-        "ITERATIONS":5000,
+        "ITERATIONS":15000,
         "DEPTH":8,
         "FILE":"cornell",
         "EYE":[0.0,5.0,10.5],
@@ -45,30 +46,30 @@
         {
             "TYPE":"cube",
             "MATERIAL":"light",
-            "TRANS":[0.0,15.0,0.0],
-            "ROTAT":[0.0,0.0,0.0],
-            "SCALE":[5.0,0.3,5.0]
+            "TRANS":[0.0,55.0,0.0],
+            "ROTAT":[180.0,0.0,0.0],
+            "SCALE":[150.0,0.3,150.0]
         },
         {
             "TYPE":"cube",
             "MATERIAL":"diffuse_white",
             "TRANS":[0.0,0.0,0.0],
             "ROTAT":[0.0,0.0,0.0],
-            "SCALE":[20.0,0.01,20.0]
+            "SCALE":[50.0,0.01,50.0]
         },
         {
             "TYPE":"cube",
             "MATERIAL":"diffuse_red",
             "TRANS":[-10.0,5.0,0.0],
             "ROTAT":[0.0,0.0,0.0],
-            "SCALE":[0.01,10.0,20.0]
+            "SCALE":[0.01,50.0,50.0]
         },
         {
             "TYPE":"cube",
             "MATERIAL":"diffuse_green",
             "TRANS":[10.0,5.0,0.0],
             "ROTAT":[0.0,0.0,0.0],
-            "SCALE":[0.01,10.0,20.0]
+            "SCALE":[0.01,50.0,50.0]
         },
         {
             "TYPE":"sphere",
@@ -79,23 +80,10 @@
         },
 		{
             "TYPE":"mesh",
-            "MATERIAL":"diffuse_white",
             "TRANS":[2.5,-1.0,1.0],
-            "ROTAT":[0.0,-45.0,0.0],
-            "SCALE":[0.06, 0.06, 0.06],
-			"PATH":"../scenes/meshes/Fox/Fox.gltf"
-        }
-    ],
-	"Lights":
-	[
-		{
-            "TYPE":"AREA",
-			"GEOMTYPE":"RECT",
-			"EMITTANCE":3.0,
-			"RGB":[1.0,1.0,1.0],
-            "TRANS":[0.0,8.5,0.0],
             "ROTAT":[0.0,0.0,0.0],
-            "SCALE":[3.0,0.3,3.0]
+            "SCALE":[0.06, 0.06, 0.06],
+			"PATH":"../scenes/meshes/Dragon/scene.gltf"
         }
-	]
+    ]
 }

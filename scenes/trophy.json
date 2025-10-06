@@ -28,25 +28,6 @@
             "TYPE":"Specular",
             "RGB":[0.98, 0.98, 0.98]
         },
-		"trophy":
-		{
-			"TYPE":"MicrofacetPBR",
-            "RGB":[0.98, 0.98, 0.98],
-			"ROUGHNESS":0.0,
-			"METALLIC":1.0,
-			"DIFFUSE":"../scenes/meshes/Trophy/Trophy_Mtl_baseColor.png",
-			"NORMAL":"../scenes/meshes/Trophy/Trophy_Mtl_normal.png",
-			"METALLIC_ROUGHNESS":"../scenes/meshes/Trophy/Trophy_Mtl_metallicRoughness.png"
-		},
-		"trophybase":
-		{
-			"TYPE":"MicrofacetPBR",
-            "RGB":[0.98, 0.98, 0.98],
-			"ROUGHNESS":0.0,
-			"METALLIC":1.0,
-			"DIFFUSE":"../scenes/meshes/Trophy/Trophy_base_Mtl_baseColor.png",
-			"METALLIC_ROUGHNESS":"../scenes/meshes/Trophy/Trophy_base_Mtl_metallicRoughness.png"
-		},
 		"pbr":
         {
             "TYPE":"MicrofacetPBR",
@@ -59,10 +40,10 @@
     {
         "RES":[800,800],
         "FOVY":45.0,
-        "ITERATIONS":5000,
+        "ITERATIONS":2000,
         "DEPTH":8,
         "FILE":"cornell",
-        "EYE":[0.0,5.0,10.5],
+        "EYE":[5.0,5.0,10.5],
         "LOOKAT":[0.0,5.0,0.0],
         "UP":[0.0,1.0,0.0]
     },
@@ -91,7 +72,6 @@
         },
 		{
             "TYPE":"mesh",
-            "MATERIAL":["trophy", "trophybase"],
             "TRANS":[0.0,-5.55,0.0],
             "ROTAT":[0.0,0.0,0.0],
             "SCALE":[0.35, 0.35, 0.35],
