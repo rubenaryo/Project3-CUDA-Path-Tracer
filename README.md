@@ -9,7 +9,7 @@ CUDA Path Tracer
 
 <img src="img/trophy_QHD_5000.png" width="1280">
 
-World Cup Trophy @ 2560x1440, 5000 Samples per pixel ([Link](https://sketchfab.com/3d-models/world-cup-trophy-e28e9b2d3c374303974bd9898bbb2a64))
+World Cup Trophy @ 2560x1440, 5000 Samples per pixel ([Model Link](https://sketchfab.com/3d-models/world-cup-trophy-e28e9b2d3c374303974bd9898bbb2a64))
 
 ### Overview
 This is a CUDA-based Monte-Carlo Path Tracer built to experiment with writing highly parallel programs and implementing different rendering methods at a low-level.
@@ -105,6 +105,45 @@ One possible explanation is that the BVH approach used splits the vertices simpl
 | ![](img/bvhChart.png) | 
 |:--:| 
 | Somewhat unexpected results |
+
+### Stream Compaction and Material Sorting
+
+An important element of building a path tracer is stream compaction. After each bounce, it is important to reorganize the list of paths such that all non-terminated paths are contiguous in memory and can be batch processed together with the minimum threads required. 
+
+Additionally, we build sortkeys based on the materials hit after each bounce. Therefore, the paths are further organized by Material Type so that all those threads can be dispatched to separate material kernels. This further optimizes shading as different material kernels have different amounts of work required.
+
+To demonstrate the inefficiency of not stream compacting, we can clearly see that for an open scene, about 5/6 of all the rays terminate after just one bounce. This can clog up thread utilization.
+
+```
+[0] 640000 -> 352181    (287819 terminated)
+[1] 352181 -> 107445    (532555 terminated)
+[2] 107445 -> 49617     (590383 terminated)
+[3] 49617  -> 23748     (616252 terminated)
+[4] 23748  -> 14496     (625504 terminated)
+[5] 14496  -> 8988      (631012 terminated)
+[6] 8988   -> 6432      (633568 terminated)
+[7] 6432   -> 4717      (635283 terminated)
+```
+
+In a closed scene, the rays don't terminate nearly as quickly, with about half still doing useful work by the third bounce.
+```
+[0] 640000 -> 530019    (109981 terminated)
+[1] 523667 -> 369954    (270046 terminated)
+[2] 363207 -> 286713    (353287 terminated)
+[3] 282126 -> 235661    (404339 terminated)
+[4] 232407 -> 200483    (439517 terminated)
+[5] 198068 -> 174252    (465748 terminated)
+[6] 172341 -> 154178    (485822 terminated)
+[7] 152719 -> 138469    (501531 terminated)
+```
+
+### A note on material sorting and zip iterators
+
+A common suggestion online to the need to sort multiple arrays in parallel is to use thrust's "zip iterators", which effectively bind together operations to a set of parallel arrays. While convenient, I observed significant performance drops from doing this!
+
+In my testing, zip iterators roughly *halved* my performance. While more investigation is needed, this is likely due to stalling from now-dependent memory reads/writes to global memory (Long Scoreboard Stall).
+
+In short, don't use them!
 
 ## Additional Files 
 Added to CMakeLists.txt in addition to those from the base code.
